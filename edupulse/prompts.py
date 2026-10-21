@@ -45,4 +45,6 @@ def build_chat_messages(
     recent = history[-max_messages:] if max_messages > 0 else []
     if recent and recent[0]["role"] == "assistant":
         recent = recent[1:]
+    # The UI stores extra keys (e.g. which persona answered); the API only wants these two.
+    recent = [{"role": m["role"], "content": m["content"]} for m in recent]
     return [{"role": "system", "content": system_prompt}, *recent]

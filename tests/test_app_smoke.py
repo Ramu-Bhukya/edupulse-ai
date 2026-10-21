@@ -128,7 +128,7 @@ def test_chat_without_key_does_not_store_question(monkeypatch):
 def test_key_takeaways_needs_conversation(fake_llm):
     at = run_app()
     at.button(key="get_takeaways").click().run()
-    assert at.info
+    assert any("Ask a few questions first" in info.value for info in at.info)
     assert at.session_state.takeaways is None
 
 
@@ -140,3 +140,20 @@ def test_key_takeaways_rendered_from_structured_output(fake_llm):
     assert not at.exception
     assert at.session_state.takeaways.points == ["Four chambers."]
     assert any("Four chambers." in md.value for md in at.markdown)
+
+
+def test_mentor_tracks_persona_and_exports(fake_llm):
+    at = run_app()
+    at.sidebar.selectbox[0].select("Math Coach").run()
+    at.chat_input[0].set_value("What is a derivative?").run()
+    assert at.session_state.messages[1]["persona"] == "Math Coach"
+    assert at.sidebar.metric[0].value == "2"
+    labels = [b.label for b in at.sidebar.get("download_button")]
+    assert labels == ["Export chat (.json)", "Export chat (.md)"]
+
+
+def test_welcome_message_only_when_empty(fake_llm):
+    at = run_app()
+    assert any("Hi! I'm your" in info.value for info in at.info)
+    at.chat_input[0].set_value("Hello").run()
+    assert not any("Hi! I'm your" in info.value for info in at.info)

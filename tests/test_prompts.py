@@ -50,3 +50,12 @@ def test_chat_messages_are_trimmed_to_recent_turns():
 
 def test_chat_messages_with_empty_history():
     assert build_chat_messages("sys", []) == [{"role": "system", "content": "sys"}]
+
+
+def test_chat_messages_strip_ui_only_keys():
+    history = [
+        {"role": "user", "content": "hi"},
+        {"role": "assistant", "content": "hello", "persona": "Math Coach"},
+    ]
+    messages = build_chat_messages("sys", history)
+    assert messages[2] == {"role": "assistant", "content": "hello"}

@@ -4,6 +4,7 @@ from datetime import datetime
 import streamlit as st
 
 from edupulse.config import MissingAPIKeyError
+from edupulse.history import export_json, export_markdown
 from edupulse.llm import StructuredOutputError, complete, get_client, stream_chat
 from edupulse.presets import find_by_name, load_presets
 from edupulse.prompts import (
@@ -17,6 +18,7 @@ from edupulse.study_tools import summarize_takeaways
 MAX_MATERIAL_CHARS = 8000
 MAX_HISTORY = 10
 MAX_CONTEXT_MESSAGES = 10
+AVATARS = {"user": "🧑‍🎓", "assistant": "🎓"}
 
 st.set_page_config(page_title="EduPulse AI", page_icon="📚", layout="wide")
 
@@ -41,22 +43,42 @@ def result_as_text(result: dict) -> str:
 
 
 with st.sidebar:
-    st.header("Settings")
-    persona_name = st.selectbox("AI persona", [p.name for p in personas])
+    st.header("Your tutor")
+    persona_name = st.selectbox("Teaching style", [p.name for p in personas])
     tone_name = st.selectbox("Tone", [t.name for t in tones])
     persona = find_by_name(personas, persona_name)
     tone = find_by_name(tones, tone_name)
     st.caption(persona.description)
 
+    st.divider()
+    st.subheader("This session")
+    st.metric("Messages", len(st.session_state.messages))
+    if st.session_state.messages:
+        st.download_button(
+            "Export chat (.json)",
+            data=export_json(st.session_state.messages, persona=persona.name, tone=tone.name),
+            file_name="edupulse_chat.json",
+            mime="application/json",
+            width="stretch",
+        )
+        st.download_button(
+            "Export chat (.md)",
+            data=export_markdown(st.session_state.messages, persona=persona.name, tone=tone.name),
+            file_name="edupulse_chat.md",
+            mime="text/markdown",
+            width="stretch",
+        )
+
 st.title("EduPulse AI")
 
-chat_tab, architect_tab = st.tabs(["Chat", "Prompt Architect"])
+mentor_tab, architect_tab = st.tabs(["AI Mentor", "Prompt Architect"])
 
-# --- Chat -------------------------------------------------------------------
-with chat_tab:
+# --- AI Mentor --------------------------------------------------------------
+with mentor_tab:
     caption_col, takeaways_col, clear_col = st.columns([3, 1, 1])
     caption_col.caption(
-        f"Chatting with the **{persona.name}** in a **{tone.name.lower()}** tone."
+        f"Learning with the **{persona.name}** in a **{tone.name.lower()}** tone. "
+        "Change the teaching style any time from the sidebar."
     )
     if takeaways_col.button("Key takeaways", key="get_takeaways"):
         if not st.session_state.messages:
@@ -79,16 +101,26 @@ with chat_tab:
             for point in st.session_state.takeaways.points:
                 st.markdown(f"- {point}")
 
+    welcome = st.empty()
+    if not st.session_state.messages:
+        welcome.info(
+            f"Hi! I'm your {persona.name.lower()}. Ask me about anything you're studying."
+        )
+
     for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
+        with st.chat_message(message["role"], avatar=AVATARS[message["role"]]):
+            if message["role"] == "assistant":
+                st.caption(message.get("persona", ""))
             st.markdown(message["content"])
 
-    question = st.chat_input("Ask your tutor anything...")
+    question = st.chat_input(f"Ask the {persona.name.lower()} anything...")
     if question:
+        welcome.empty()
         st.session_state.messages.append({"role": "user", "content": question})
-        with st.chat_message("user"):
+        with st.chat_message("user", avatar=AVATARS["user"]):
             st.markdown(question)
-        with st.chat_message("assistant"):
+        with st.chat_message("assistant", avatar=AVATARS["assistant"]):
+            st.caption(persona.name)
             try:
                 client = get_client()
                 messages = build_chat_messages(
@@ -101,7 +133,10 @@ with chat_tab:
                 st.session_state.messages.pop()  # don't keep a question with no answer
                 st.error(str(exc))
             else:
-                st.session_state.messages.append({"role": "assistant", "content": reply})
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": reply, "persona": persona.name}
+                )
+                st.rerun()  # refresh the sidebar counter and export buttons
 
 # --- Prompt Architect -------------------------------------------------------
 with architect_tab:
