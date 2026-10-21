@@ -31,3 +31,18 @@ def build_user_prompt(task: str, material: str) -> str:
     if task not in TASKS:
         raise ValueError(f"Unknown task: {task!r}")
     return f"{TASKS[task]}\n\n---\n{material.strip()}\n---"
+
+
+def build_chat_messages(
+    system_prompt: str, history: list[dict], max_messages: int = 10
+) -> list[dict]:
+    """System prompt + the most recent chat turns.
+
+    Only the last `max_messages` messages are sent so long conversations
+    don't blow up the context window (and the bill). The window never
+    starts with an assistant message.
+    """
+    recent = history[-max_messages:] if max_messages > 0 else []
+    if recent and recent[0]["role"] == "assistant":
+        recent = recent[1:]
+    return [{"role": "system", "content": system_prompt}, *recent]

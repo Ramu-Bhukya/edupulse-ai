@@ -91,3 +91,35 @@ def test_chat_streams_reply(fake_llm):
     sent = fake_llm.chat.completions.calls[0]
     assert sent["stream"] is True
     assert sent["messages"][-1] == {"role": "user", "content": "What is a ventricle?"}
+
+
+def test_chat_remembers_previous_turns(fake_llm):
+    at = run_app()
+    at.chat_input[0].set_value("What is a ventricle?").run()
+    at.chat_input[0].set_value("And an atrium?").run()
+
+    assert [m["role"] for m in at.session_state.messages] == [
+        "user",
+        "assistant",
+        "user",
+        "assistant",
+    ]
+    assert len(at.chat_message) == 4
+    second_call = fake_llm.chat.completions.calls[1]["messages"]
+    assert [m["role"] for m in second_call] == ["system", "user", "assistant", "user"]
+
+
+def test_clear_chat(fake_llm):
+    at = run_app()
+    at.chat_input[0].set_value("What is a ventricle?").run()
+    at.button(key="clear_chat").click().run()
+    assert at.session_state.messages == []
+    assert len(at.chat_message) == 0
+
+
+def test_chat_without_key_does_not_store_question(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    at = run_app()
+    at.chat_input[0].set_value("Hello?").run()
+    assert at.session_state.messages == []
+    assert "API key" in at.error[0].value

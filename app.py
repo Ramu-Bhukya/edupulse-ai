@@ -6,10 +6,16 @@ import streamlit as st
 from edupulse.config import MissingAPIKeyError
 from edupulse.llm import complete, get_client, stream_chat
 from edupulse.presets import find_by_name, load_presets
-from edupulse.prompts import TASKS, build_system_prompt, build_user_prompt
+from edupulse.prompts import (
+    TASKS,
+    build_chat_messages,
+    build_system_prompt,
+    build_user_prompt,
+)
 
 MAX_MATERIAL_CHARS = 8000
 MAX_HISTORY = 10
+MAX_CONTEXT_MESSAGES = 10
 
 st.set_page_config(page_title="EduPulse AI", page_icon="📚", layout="wide")
 
@@ -19,6 +25,8 @@ if "generated" not in st.session_state:
     st.session_state.generated = None
 if "history" not in st.session_state:
     st.session_state.history = []
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
 
 def result_as_text(result: dict) -> str:
@@ -43,21 +51,37 @@ chat_tab, architect_tab = st.tabs(["Chat", "Prompt Architect"])
 
 # --- Chat -------------------------------------------------------------------
 with chat_tab:
-    st.caption(f"Chatting with the **{persona.name}** in a **{tone.name.lower()}** tone.")
+    caption_col, clear_col = st.columns([4, 1])
+    caption_col.caption(
+        f"Chatting with the **{persona.name}** in a **{tone.name.lower()}** tone."
+    )
+    if clear_col.button("Clear chat", key="clear_chat"):
+        st.session_state.messages = []
+        st.rerun()
+
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
     question = st.chat_input("Ask your tutor anything...")
     if question:
+        st.session_state.messages.append({"role": "user", "content": question})
         with st.chat_message("user"):
             st.markdown(question)
         with st.chat_message("assistant"):
             try:
                 client = get_client()
-                messages = [
-                    {"role": "system", "content": build_system_prompt(persona, tone)},
-                    {"role": "user", "content": question},
-                ]
-                st.write_stream(stream_chat(client, messages))
+                messages = build_chat_messages(
+                    build_system_prompt(persona, tone),
+                    st.session_state.messages,
+                    max_messages=MAX_CONTEXT_MESSAGES,
+                )
+                reply = st.write_stream(stream_chat(client, messages))
             except MissingAPIKeyError as exc:
+                st.session_state.messages.pop()  # don't keep a question with no answer
                 st.error(str(exc))
+            else:
+                st.session_state.messages.append({"role": "assistant", "content": reply})
 
 # --- Prompt Architect -------------------------------------------------------
 with architect_tab:

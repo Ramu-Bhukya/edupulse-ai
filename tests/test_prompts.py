@@ -1,7 +1,12 @@
 import pytest
 
 from edupulse.presets import Persona, Tone
-from edupulse.prompts import TASKS, build_system_prompt, build_user_prompt
+from edupulse.prompts import (
+    TASKS,
+    build_chat_messages,
+    build_system_prompt,
+    build_user_prompt,
+)
 
 PERSONA = Persona(name="Tester", description="d", instructions="You are a test tutor.")
 TONE = Tone(name="Calm", instructions="Stay calm.")
@@ -23,3 +28,25 @@ def test_user_prompt_contains_task_and_material(task):
 def test_unknown_task_rejected():
     with pytest.raises(ValueError):
         build_user_prompt("Dance", "text")
+
+
+def _history(n):
+    roles = ["user", "assistant"]
+    return [{"role": roles[i % 2], "content": f"m{i}"} for i in range(n)]
+
+
+def test_chat_messages_start_with_system_prompt():
+    messages = build_chat_messages("sys", _history(2))
+    assert messages[0] == {"role": "system", "content": "sys"}
+    assert [m["content"] for m in messages[1:]] == ["m0", "m1"]
+
+
+def test_chat_messages_are_trimmed_to_recent_turns():
+    messages = build_chat_messages("sys", _history(15), max_messages=4)
+    # last 4 would start with an assistant message (m11), so it is dropped
+    assert [m["content"] for m in messages[1:]] == ["m12", "m13", "m14"]
+    assert messages[1]["role"] == "user"
+
+
+def test_chat_messages_with_empty_history():
+    assert build_chat_messages("sys", []) == [{"role": "system", "content": "sys"}]
