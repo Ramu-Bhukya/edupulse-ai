@@ -96,14 +96,25 @@ store = get_store(get_settings().chroma_dir)
 
 
 def set_document(info) -> None:
-    """Switch the active document and forget results that belonged to the old one."""
+    """Switch the active document and reset everything tied to the old one.
+
+    Called on every rerun, so it must be a no-op when nothing changed
+    (including "no document" -> "no document").
+    """
     current = st.session_state.document
-    if current is not None and info is not None and current.doc_id == info.doc_id:
+    old_id = current.doc_id if current else None
+    new_id = info.doc_id if info else None
+    if old_id == new_id:
         return
     st.session_state.document = info
     st.session_state.search_results = None
     st.session_state.quiz = None
     st.session_state.deck = None
+    if st.session_state.messages:
+        # answers about the old document would be confusing next to the new one
+        st.session_state.messages = []
+        st.session_state.takeaways = None
+        st.toast("Started a fresh chat for the new document.")
 
 
 def result_as_text(result: dict) -> str:
@@ -146,17 +157,35 @@ with st.sidebar:
         data = uploaded.getvalue()
         current = st.session_state.document
         if current is None or current.doc_id != document_id(data):
-            try:
-                with st.spinner("Processing document..."):
+            with st.status(f"Processing {uploaded.name}...", expanded=True) as status:
+                bar = st.empty()
+
+                def show_progress(done: int, total: int) -> None:
+                    bar.progress(done / total, text=f"Embedded {done} of {total} chunks")
+
+                try:
                     embedder = OpenAIEmbedder(get_client(user_key))
-                    info, cached = index_pdf(data, uploaded.name, store, embedder)
-                set_document(info)
-                if cached:
-                    st.toast(f"{info.filename} was indexed before, loaded it instantly.")
-            except PDFParseError as exc:
-                st.error(str(exc))
-            except LLM_ERRORS as exc:
-                st.error(friendly_error(exc))
+                    info, cached = index_pdf(
+                        data,
+                        uploaded.name,
+                        store,
+                        embedder,
+                        on_step=st.write,
+                        on_progress=show_progress,
+                    )
+                except PDFParseError as exc:
+                    status.update(label="Couldn't read this PDF", state="error")
+                    st.error(str(exc))
+                except LLM_ERRORS as exc:
+                    status.update(label="Indexing failed", state="error")
+                    st.error(friendly_error(exc))
+                else:
+                    set_document(info)
+                    status.update(
+                        label=f"{info.filename} is ready", state="complete", expanded=False
+                    )
+                    if cached:
+                        st.toast(f"{info.filename} was indexed before, loaded it instantly.")
     else:
         # Documents indexed in earlier sessions are still in Chroma, so they
         # can be reopened without uploading (or paying for embeddings) again.

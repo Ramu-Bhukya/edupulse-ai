@@ -440,3 +440,27 @@ def test_new_document_clears_quiz_and_cards(fake_rag, fake_llm):
     ).run()
     assert at.session_state.deck is None
     assert at.session_state.quiz is None
+
+
+def test_mentor_chat_survives_reruns_with_library_but_no_document(fake_rag, fake_llm):
+    upload_sample(run_app())  # puts a document in the library
+    at = run_app()  # new session, nothing selected
+    at.chat_input[0].set_value("What is a cell?").run()
+    at.run()
+    assert len(at.session_state.messages) == 2
+
+
+def test_switching_document_starts_fresh_chat(fake_rag, fake_llm):
+    at = run_app()
+    at.chat_input[0].set_value("General question first").run()
+    assert at.session_state.messages
+    at = upload_sample(at)
+    assert at.session_state.messages == []
+    assert any("fresh chat" in t.value for t in at.toast)
+
+
+def test_upload_shows_processing_steps(fake_rag):
+    at = upload_sample(run_app())
+    status = at.sidebar.status[0]
+    assert status.label == "cells.pdf is ready"
+    assert any("Split the text into" in md.value for md in status.markdown)

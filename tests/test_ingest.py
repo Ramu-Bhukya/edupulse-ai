@@ -47,6 +47,19 @@ def test_progress_is_reported(store, keyword_embedder):
     assert progress and progress[-1][0] == progress[-1][1]
 
 
+def test_steps_are_reported(store, keyword_embedder):
+    steps = []
+    index_pdf(SAMPLE.read_bytes(), "cells.pdf", store, keyword_embedder, on_step=steps.append)
+    assert steps[0] == "Reading the PDF..."
+    assert "Found 3 pages." in steps
+    assert any(s.startswith("Split the text into") for s in steps)
+    assert steps[-1] == "Saving to the vector database..."
+
+    steps.clear()
+    index_pdf(SAMPLE.read_bytes(), "cells.pdf", store, keyword_embedder, on_step=steps.append)
+    assert steps == ["Already indexed, reusing the saved index."]
+
+
 def test_bad_pdf_raises_parse_error(store, keyword_embedder):
     with pytest.raises(PDFParseError):
         index_pdf(b"nope", "bad.pdf", store, keyword_embedder)
