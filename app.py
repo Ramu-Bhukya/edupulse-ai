@@ -3,9 +3,12 @@ from datetime import datetime
 
 import streamlit as st
 
-from edupulse.config import MissingAPIKeyError, get_api_key, mask_key
+from edupulse.config import MissingAPIKeyError, get_api_key, get_settings, mask_key
+from edupulse.embeddings import OpenAIEmbedder
 from edupulse.history import export_json, export_markdown
+from edupulse.ingest import index_pdf
 from edupulse.llm import LLM_ERRORS, complete, friendly_error, get_client, stream_chat
+from edupulse.pdf_parser import PDFParseError
 from edupulse.presets import find_by_name, load_presets
 from edupulse.prompts import (
     TASKS,
@@ -14,6 +17,7 @@ from edupulse.prompts import (
     build_user_prompt,
 )
 from edupulse.study_tools import summarize_takeaways
+from edupulse.vector_store import VectorStore, document_id
 
 MAX_MATERIAL_CHARS = 8000
 MAX_HISTORY = 10
@@ -32,6 +36,18 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "takeaways" not in st.session_state:
     st.session_state.takeaways = None
+if "document" not in st.session_state:
+    st.session_state.document = None
+if "search_results" not in st.session_state:
+    st.session_state.search_results = None
+
+
+@st.cache_resource
+def get_store(path: str) -> VectorStore:
+    return VectorStore.persistent(path)
+
+
+store = get_store(get_settings().chroma_dir)
 
 
 def result_as_text(result: dict) -> str:
@@ -68,6 +84,29 @@ with st.sidebar:
             st.caption("No key configured yet. Paste one above to start chatting.")
 
     st.divider()
+    st.subheader("Your document")
+    uploaded = st.file_uploader("Upload a PDF textbook or syllabus", type=["pdf"])
+    if uploaded is None:
+        st.session_state.document = None
+    else:
+        data = uploaded.getvalue()
+        current = st.session_state.document
+        if current is None or current.doc_id != document_id(data):
+            try:
+                with st.spinner("Processing document..."):
+                    embedder = OpenAIEmbedder(get_client(user_key))
+                    info, _ = index_pdf(data, uploaded.name, store, embedder)
+                st.session_state.document = info
+                st.session_state.search_results = None
+            except PDFParseError as exc:
+                st.error(str(exc))
+            except LLM_ERRORS as exc:
+                st.error(friendly_error(exc))
+    if st.session_state.document:
+        doc = st.session_state.document
+        st.success(f"**{doc.filename}**  \n{doc.page_count} pages · {doc.chunk_count} chunks")
+
+    st.divider()
     st.subheader("This session")
     st.metric("Messages", len(st.session_state.messages))
     if st.session_state.messages:
@@ -88,7 +127,7 @@ with st.sidebar:
 
 st.title("EduPulse AI")
 
-mentor_tab, architect_tab = st.tabs(["AI Mentor", "Prompt Architect"])
+mentor_tab, kb_tab, architect_tab = st.tabs(["AI Mentor", "Knowledge Base", "Prompt Architect"])
 
 # --- AI Mentor --------------------------------------------------------------
 with mentor_tab:
@@ -154,6 +193,39 @@ with mentor_tab:
                     {"role": "assistant", "content": reply, "persona": persona.name}
                 )
                 st.rerun()  # refresh the sidebar counter and export buttons
+
+# --- Knowledge Base ---------------------------------------------------------
+with kb_tab:
+    doc = st.session_state.document
+    if doc is None:
+        st.info("Upload a PDF in the sidebar to search it by meaning, not just keywords.")
+    else:
+        st.write(f"Search **{doc.filename}** by meaning. Try a question or a few key words.")
+        with st.form("kb_search"):
+            query = st.text_input(
+                "Search your document",
+                key="kb_query",
+                placeholder="e.g. How do cells make energy?",
+            )
+            k = st.slider("Number of results", min_value=1, max_value=5, value=3)
+            submitted = st.form_submit_button("Search", type="primary")
+        if submitted:
+            if not query.strip():
+                st.warning("Type something to search for.")
+            else:
+                try:
+                    with st.spinner("Searching..."):
+                        embedder = OpenAIEmbedder(get_client(user_key))
+                        st.session_state.search_results = store.search(
+                            doc.doc_id, embedder.embed_query(query), k=k
+                        )
+                except LLM_ERRORS as exc:
+                    st.error(friendly_error(exc))
+
+        for rank, result in enumerate(st.session_state.search_results or [], start=1):
+            with st.container(border=True):
+                st.markdown(f"**#{rank}** · {result.chunk.page_label}")
+                st.write(result.chunk.text)
 
 # --- Prompt Architect -------------------------------------------------------
 with architect_tab:

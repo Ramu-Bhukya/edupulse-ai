@@ -5,10 +5,11 @@ import openai
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from edupulse import llm
-from tests.conftest import FakeOpenAI
+from edupulse import embeddings, llm
+from tests.conftest import FakeOpenAI, KeywordEmbedder
 
 APP = str(Path(__file__).resolve().parent.parent / "app.py")
+SAMPLE = Path(__file__).resolve().parent.parent / "samples" / "cell_biology_notes.pdf"
 MATERIAL = "The heart has four chambers: two atria and two ventricles."
 
 
@@ -17,6 +18,25 @@ def fake_llm(monkeypatch):
     client = FakeOpenAI("**Answer** from the fake tutor")
     monkeypatch.setattr(llm, "get_client", lambda api_key=None: client)
     return client
+
+
+@pytest.fixture(autouse=True)
+def isolated_chroma(monkeypatch, tmp_path):
+    # every test gets its own empty vector store
+    monkeypatch.setenv("CHROMA_DIR", str(tmp_path / "chroma"))
+
+
+@pytest.fixture
+def fake_rag(monkeypatch, fake_llm):
+    embedder = KeywordEmbedder()
+    monkeypatch.setattr(embeddings, "OpenAIEmbedder", lambda client, **kwargs: embedder)
+    return embedder
+
+
+def upload_sample(at: AppTest) -> AppTest:
+    return at.sidebar.file_uploader[0].upload(
+        "cells.pdf", SAMPLE.read_bytes(), "application/pdf"
+    ).run()
 
 
 def run_app() -> AppTest:
@@ -193,3 +213,39 @@ def test_sidebar_key_is_passed_to_client(monkeypatch):
     at.chat_input[0].set_value("Hello?").run()
     assert seen[-1] == "sk-user-supplied-key"
     assert "sk-...-key" in at.sidebar.caption[-1].value
+
+
+def test_knowledge_base_needs_a_document():
+    at = run_app()
+    assert any("Upload a PDF in the sidebar" in info.value for info in at.info)
+
+
+def test_upload_indexes_pdf_once(fake_rag):
+    at = upload_sample(run_app())
+    assert not at.exception
+    doc = at.session_state.document
+    assert doc.filename == "cells.pdf"
+    assert doc.page_count == 3
+    assert "3 pages" in at.sidebar.success[0].value
+
+    # further reruns must not index again
+    at.run()
+    assert fake_rag.calls == 1
+
+
+def test_knowledge_base_search(fake_rag):
+    at = upload_sample(run_app())
+    at.text_input(key="kb_query").input("What does the Golgi apparatus do?")
+    at.button(key="FormSubmitter:kb_search-Search").click().run()
+    assert not at.exception
+    results = at.session_state.search_results
+    assert len(results) == 3
+    assert "Golgi" in results[0].chunk.text
+
+
+def test_invalid_pdf_shows_error(fake_rag):
+    at = run_app()
+    at.sidebar.file_uploader[0].upload("broken.pdf", b"not a pdf", "application/pdf").run()
+    assert not at.exception
+    assert "valid PDF" in at.sidebar.error[0].value
+    assert at.session_state.document is None

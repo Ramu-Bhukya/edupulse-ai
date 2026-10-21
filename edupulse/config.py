@@ -18,6 +18,7 @@ load_dotenv()
 
 DEFAULT_CHAT_MODEL = "gpt-4o-mini"
 DEFAULT_EMBED_MODEL = "text-embedding-3-small"
+DEFAULT_CHROMA_DIR = ".chroma"
 
 
 class MissingAPIKeyError(RuntimeError):
@@ -29,6 +30,7 @@ class Settings:
     chat_model: str
     embed_model: str
     temperature: float
+    chroma_dir: str
 
 
 def get_settings() -> Settings:
@@ -40,6 +42,7 @@ def get_settings() -> Settings:
         chat_model=os.getenv("OPENAI_MODEL", DEFAULT_CHAT_MODEL),
         embed_model=os.getenv("EMBED_MODEL", DEFAULT_EMBED_MODEL),
         temperature=temperature,
+        chroma_dir=os.getenv("CHROMA_DIR", DEFAULT_CHROMA_DIR),
     )
 
 
