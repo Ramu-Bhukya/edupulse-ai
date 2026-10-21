@@ -26,6 +26,19 @@ def test_embed_query(fake_client):
     assert OpenAIEmbedder(fake_client).embed_query("hello") == [5.0, 0.0]
 
 
+def test_repeated_queries_are_cached(fake_client, monkeypatch):
+    monkeypatch.setattr("edupulse.embeddings.QUERY_CACHE_SIZE", 2)
+    embedder = OpenAIEmbedder(fake_client)
+    embedder.embed_query("osmosis")
+    embedder.embed_query(" osmosis ")  # same after stripping
+    assert len(fake_client.embeddings.calls) == 1
+
+    embedder.embed_query("mitosis")
+    embedder.embed_query("meiosis")  # evicts "osmosis"
+    embedder.embed_query("osmosis")
+    assert len(fake_client.embeddings.calls) == 4
+
+
 def test_default_model_comes_from_settings(fake_client, monkeypatch):
     monkeypatch.setenv("EMBED_MODEL", "my-embedding-model")
     assert OpenAIEmbedder(fake_client).model == "my-embedding-model"

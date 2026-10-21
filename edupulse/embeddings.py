@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+from collections import OrderedDict
 from collections.abc import Callable
 from typing import Protocol
 
@@ -10,6 +12,7 @@ from openai import OpenAI
 from edupulse.config import get_settings
 
 BATCH_SIZE = 100  # well below the API limit, keeps each request small
+QUERY_CACHE_SIZE = 256
 
 ProgressCallback = Callable[[int, int], None]  # (done, total)
 
@@ -31,6 +34,9 @@ class OpenAIEmbedder:
         self.client = client
         self.model = model or get_settings().embed_model
         self.batch_size = batch_size
+        # Searches, quiz topics and chat follow-ups often repeat the same text.
+        self._query_cache: OrderedDict[str, list[float]] = OrderedDict()
+        self._lock = threading.Lock()  # Streamlit sessions run in threads
 
     def embed(
         self, texts: list[str], on_progress: ProgressCallback | None = None
@@ -49,4 +55,14 @@ class OpenAIEmbedder:
         return vectors
 
     def embed_query(self, text: str) -> list[float]:
-        return self.embed([text])[0]
+        key = text.strip()
+        with self._lock:
+            if key in self._query_cache:
+                self._query_cache.move_to_end(key)
+                return self._query_cache[key]
+        vector = self.embed([text])[0]
+        with self._lock:
+            self._query_cache[key] = vector
+            if len(self._query_cache) > QUERY_CACHE_SIZE:
+                self._query_cache.popitem(last=False)
+        return vector

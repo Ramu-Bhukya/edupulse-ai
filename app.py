@@ -4,6 +4,7 @@ import random
 from datetime import datetime
 
 import streamlit as st
+from openai import OpenAI
 
 from edupulse.config import MissingAPIKeyError, get_api_key, get_settings, mask_key
 from edupulse.embeddings import OpenAIEmbedder
@@ -92,6 +93,21 @@ def get_store(path: str) -> VectorStore:
     return VectorStore.persistent(path)
 
 
+@st.cache_resource(show_spinner=False)
+def get_ai(api_key: str) -> tuple[OpenAI, OpenAIEmbedder]:
+    """One OpenAI client + embedder per API key, reused across reruns.
+
+    Keeps the HTTP connection pool (and the embedder's query cache) alive
+    instead of rebuilding them on every click.
+    """
+    client = get_client(api_key)
+    return client, OpenAIEmbedder(client)
+
+
+def ai() -> tuple[OpenAI, OpenAIEmbedder]:
+    return get_ai(get_api_key(user_key))
+
+
 store = get_store(get_settings().chroma_dir)
 
 
@@ -153,7 +169,11 @@ with st.sidebar:
     st.divider()
     st.subheader("Your document")
     uploaded = st.file_uploader("Upload a PDF textbook or syllabus", type=["pdf"])
-    if uploaded is not None:
+    # Hashing a large PDF on every rerun is wasteful, so remember which upload
+    # (and key, in case indexing failed for lack of one) was already handled.
+    upload_attempt = (uploaded.file_id, user_key) if uploaded is not None else None
+    if uploaded is not None and upload_attempt != st.session_state.get("upload_attempt"):
+        st.session_state.upload_attempt = upload_attempt
         data = uploaded.getvalue()
         current = st.session_state.document
         if current is None or current.doc_id != document_id(data):
@@ -164,7 +184,7 @@ with st.sidebar:
                     bar.progress(done / total, text=f"Embedded {done} of {total} chunks")
 
                 try:
-                    embedder = OpenAIEmbedder(get_client(user_key))
+                    _, embedder = ai()
                     info, cached = index_pdf(
                         data,
                         uploaded.name,
@@ -186,7 +206,8 @@ with st.sidebar:
                     )
                     if cached:
                         st.toast(f"{info.filename} was indexed before, loaded it instantly.")
-    else:
+    elif uploaded is None:
+        st.session_state.upload_attempt = None
         # Documents indexed in earlier sessions are still in Chroma, so they
         # can be reopened without uploading (or paying for embeddings) again.
         library = {d.doc_id: d for d in store.list_documents()}
@@ -254,7 +275,7 @@ with chat_tab:
             try:
                 with st.spinner("Summarizing the conversation..."):
                     st.session_state.takeaways = summarize_takeaways(
-                        get_client(user_key), st.session_state.messages
+                        ai()[0], st.session_state.messages
                     )
             except LLM_ERRORS as exc:
                 st.error(friendly_error(exc))
@@ -308,14 +329,14 @@ with chat_tab:
         with st.chat_message("assistant", avatar=AVATARS["assistant"]):
             st.caption(persona.name)
             try:
-                client = get_client(user_key)
+                client, embedder = ai()
                 system_prompt = build_system_prompt(persona, tone)
                 sources = []
                 if active_doc:
                     sources, stream = answer_stream(
                         client,
                         store,
-                        OpenAIEmbedder(client),
+                        embedder,
                         active_doc.doc_id,
                         system_prompt,
                         st.session_state.messages,
@@ -370,8 +391,8 @@ with quiz_tab:
         if make_quiz:
             try:
                 with st.spinner("Writing your quiz..."):
-                    client = get_client(user_key)
-                    chunks = sample_context(store, OpenAIEmbedder(client), doc.doc_id, topic)
+                    client, embedder = ai()
+                    chunks = sample_context(store, embedder, doc.doc_id, topic)
                     st.session_state.quiz = generate_quiz(client, chunks, n=int(n_questions))
                 st.session_state.quiz_answers = []
                 st.session_state.quiz_submitted = False
@@ -446,10 +467,8 @@ with cards_tab:
         if make_cards:
             try:
                 with st.spinner("Making your flashcards..."):
-                    client = get_client(user_key)
-                    chunks = sample_context(
-                        store, OpenAIEmbedder(client), doc.doc_id, card_topic
-                    )
+                    client, embedder = ai()
+                    chunks = sample_context(store, embedder, doc.doc_id, card_topic)
                     deck = generate_flashcards(client, chunks, n=int(n_cards))
                 st.session_state.deck = deck
                 st.session_state.card_order = list(range(len(deck.cards)))
@@ -525,7 +544,7 @@ with search_tab:
             else:
                 try:
                     with st.spinner("Searching..."):
-                        embedder = OpenAIEmbedder(get_client(user_key))
+                        _, embedder = ai()
                         st.session_state.search_results = store.search(
                             doc.doc_id, embedder.embed_query(query), k=k
                         )
@@ -569,7 +588,7 @@ with architect_tab:
                 system_prompt = build_system_prompt(persona, tone)
                 user_prompt = build_user_prompt(task, material)
                 try:
-                    client = get_client(user_key)
+                    client, _ = ai()
                     with st.spinner(f"{persona.name} is thinking..."):
                         response = complete(
                             client,

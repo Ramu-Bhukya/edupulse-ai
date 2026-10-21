@@ -3,6 +3,7 @@ from pathlib import Path
 import httpx2
 import openai
 import pytest
+import streamlit as st
 from streamlit.testing.v1 import AppTest
 
 from edupulse import embeddings, llm
@@ -13,9 +14,18 @@ SAMPLE = Path(__file__).resolve().parent.parent / "samples" / "cell_biology_note
 MATERIAL = "The heart has four chambers: two atria and two ventricles."
 
 
+@pytest.fixture(autouse=True)
+def fresh_caches():
+    # st.cache_resource is process-wide; don't leak fakes between tests
+    st.cache_resource.clear()
+    yield
+    st.cache_resource.clear()
+
+
 @pytest.fixture
 def fake_llm(monkeypatch):
     client = FakeOpenAI("**Answer** from the fake tutor")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-key-1234")
     monkeypatch.setattr(llm, "get_client", lambda api_key=None: client)
     return client
 
@@ -182,6 +192,8 @@ def test_welcome_message_only_when_empty(fake_llm):
 
 
 def test_api_errors_are_shown_not_raised(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-revoked-key-0000")
+
     class BrokenCompletions:
         def create(self, **kwargs):
             request = httpx2.Request("POST", "https://api.openai.com/v1/chat/completions")
@@ -464,3 +476,18 @@ def test_upload_shows_processing_steps(fake_rag):
     status = at.sidebar.status[0]
     assert status.label == "cells.pdf is ready"
     assert any("Split the text into" in md.value for md in status.markdown)
+
+
+def test_openai_client_is_created_once_per_key(monkeypatch):
+    created = []
+
+    def fake_get_client(api_key=None):
+        created.append(api_key)
+        return FakeOpenAI()
+
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-key-1234")
+    monkeypatch.setattr(llm, "get_client", fake_get_client)
+    at = run_app()
+    at.chat_input[0].set_value("First question").run()
+    at.chat_input[0].set_value("Second question").run()
+    assert created == ["sk-test-key-1234"]
