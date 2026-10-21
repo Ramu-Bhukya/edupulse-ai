@@ -16,6 +16,7 @@ from edupulse.prompts import (
     build_system_prompt,
     build_user_prompt,
 )
+from edupulse.rag_engine import answer_stream
 from edupulse.study_tools import summarize_takeaways
 from edupulse.text_utils import highlight_terms
 from edupulse.vector_store import VectorStore, document_id
@@ -160,11 +161,18 @@ mentor_tab, kb_tab, architect_tab = st.tabs(["AI Mentor", "Knowledge Base", "Pro
 
 # --- AI Mentor --------------------------------------------------------------
 with mentor_tab:
+    active_doc = st.session_state.document
     caption_col, takeaways_col, clear_col = st.columns([3, 1, 1])
-    caption_col.caption(
-        f"Learning with the **{persona.name}** in a **{tone.name.lower()}** tone. "
-        "Change the teaching style any time from the sidebar."
-    )
+    if active_doc:
+        caption_col.caption(
+            f"Answering from **{active_doc.filename}** as the **{persona.name}** "
+            f"({tone.name.lower()} tone)."
+        )
+    else:
+        caption_col.caption(
+            f"Learning with the **{persona.name}** in a **{tone.name.lower()}** tone. "
+            "Upload a PDF in the sidebar to chat with your own notes."
+        )
     if takeaways_col.button("Key takeaways", key="get_takeaways"):
         if not st.session_state.messages:
             st.info("Ask a few questions first, then I can summarize them.")
@@ -208,12 +216,27 @@ with mentor_tab:
             st.caption(persona.name)
             try:
                 client = get_client(user_key)
-                messages = build_chat_messages(
-                    build_system_prompt(persona, tone),
-                    st.session_state.messages,
-                    max_messages=MAX_CONTEXT_MESSAGES,
-                )
-                reply = st.write_stream(stream_chat(client, messages))
+                system_prompt = build_system_prompt(persona, tone)
+                if active_doc:
+                    _, stream = answer_stream(
+                        client,
+                        store,
+                        OpenAIEmbedder(client),
+                        active_doc.doc_id,
+                        system_prompt,
+                        st.session_state.messages,
+                        max_messages=MAX_CONTEXT_MESSAGES,
+                    )
+                else:
+                    stream = stream_chat(
+                        client,
+                        build_chat_messages(
+                            system_prompt,
+                            st.session_state.messages,
+                            max_messages=MAX_CONTEXT_MESSAGES,
+                        ),
+                    )
+                reply = st.write_stream(stream)
             except LLM_ERRORS as exc:
                 st.session_state.messages.pop()  # don't keep a question with no answer
                 st.error(friendly_error(exc))

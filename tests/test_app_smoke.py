@@ -285,3 +285,19 @@ def test_search_results_show_score_and_highlights(fake_rag):
     at.button(key="FormSubmitter:kb_search-Search").click().run()
     assert at.get("progress")
     assert any("**Golgi**" in md.value for md in at.markdown)
+
+
+def test_chat_uses_document_context_when_loaded(fake_rag, fake_llm):
+    at = upload_sample(run_app())
+    at.chat_input[0].set_value("What does the Golgi apparatus do?").run()
+    assert not at.exception
+    system = fake_llm.chat.completions.calls[-1]["messages"][0]["content"]
+    assert "Context:" in system
+    assert "Golgi apparatus" in system
+
+
+def test_chat_without_document_has_no_context(fake_llm):
+    at = run_app()
+    at.chat_input[0].set_value("What is a cell?").run()
+    system = fake_llm.chat.completions.calls[-1]["messages"][0]["content"]
+    assert "Context:" not in system
