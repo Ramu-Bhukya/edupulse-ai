@@ -3,9 +3,9 @@ from datetime import datetime
 
 import streamlit as st
 
-from edupulse.config import MissingAPIKeyError
+from edupulse.config import MissingAPIKeyError, get_api_key, mask_key
 from edupulse.history import export_json, export_markdown
-from edupulse.llm import StructuredOutputError, complete, get_client, stream_chat
+from edupulse.llm import LLM_ERRORS, complete, friendly_error, get_client, stream_chat
 from edupulse.presets import find_by_name, load_presets
 from edupulse.prompts import (
     TASKS,
@@ -50,6 +50,23 @@ with st.sidebar:
     tone = find_by_name(tones, tone_name)
     st.caption(persona.description)
 
+    try:
+        env_key = get_api_key()
+    except MissingAPIKeyError:
+        env_key = None
+    with st.expander("OpenAI API key", expanded=env_key is None):
+        user_key = st.text_input(
+            "Use your own key",
+            type="password",
+            help="Only kept for this browser session. It is never saved.",
+        )
+        if user_key.strip():
+            st.caption(f"Using your key {mask_key(user_key.strip())}")
+        elif env_key:
+            st.caption(f"Using the app's key {mask_key(env_key)}")
+        else:
+            st.caption("No key configured yet. Paste one above to start chatting.")
+
     st.divider()
     st.subheader("This session")
     st.metric("Messages", len(st.session_state.messages))
@@ -87,10 +104,10 @@ with mentor_tab:
             try:
                 with st.spinner("Summarizing the conversation..."):
                     st.session_state.takeaways = summarize_takeaways(
-                        get_client(), st.session_state.messages
+                        get_client(user_key), st.session_state.messages
                     )
-            except (MissingAPIKeyError, StructuredOutputError) as exc:
-                st.error(str(exc))
+            except LLM_ERRORS as exc:
+                st.error(friendly_error(exc))
     if clear_col.button("Clear chat", key="clear_chat"):
         st.session_state.messages = []
         st.session_state.takeaways = None
@@ -122,16 +139,16 @@ with mentor_tab:
         with st.chat_message("assistant", avatar=AVATARS["assistant"]):
             st.caption(persona.name)
             try:
-                client = get_client()
+                client = get_client(user_key)
                 messages = build_chat_messages(
                     build_system_prompt(persona, tone),
                     st.session_state.messages,
                     max_messages=MAX_CONTEXT_MESSAGES,
                 )
                 reply = st.write_stream(stream_chat(client, messages))
-            except MissingAPIKeyError as exc:
+            except LLM_ERRORS as exc:
                 st.session_state.messages.pop()  # don't keep a question with no answer
-                st.error(str(exc))
+                st.error(friendly_error(exc))
             else:
                 st.session_state.messages.append(
                     {"role": "assistant", "content": reply, "persona": persona.name}
@@ -161,7 +178,7 @@ with architect_tab:
                 system_prompt = build_system_prompt(persona, tone)
                 user_prompt = build_user_prompt(task, material)
                 try:
-                    client = get_client()
+                    client = get_client(user_key)
                     with st.spinner(f"{persona.name} is thinking..."):
                         response = complete(
                             client,
@@ -170,8 +187,8 @@ with architect_tab:
                                 {"role": "user", "content": user_prompt},
                             ],
                         )
-                except MissingAPIKeyError as exc:
-                    st.error(str(exc))
+                except LLM_ERRORS as exc:
+                    st.error(friendly_error(exc))
                 else:
                     result = {
                         "created_at": datetime.now().isoformat(timespec="seconds"),

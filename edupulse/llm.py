@@ -9,16 +9,17 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import TypeVar
 
+import openai
 from openai import OpenAI
 from pydantic import BaseModel
 
-from edupulse.config import get_api_key, get_settings
+from edupulse.config import MissingAPIKeyError, get_api_key, get_settings
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
 def get_client(api_key: str | None = None) -> OpenAI:
-    return OpenAI(api_key=get_api_key(api_key))
+    return OpenAI(api_key=get_api_key(api_key), max_retries=2, timeout=60)
 
 
 def complete(
@@ -88,3 +89,31 @@ def parse_structured(
     if message.parsed is None:
         raise StructuredOutputError("The model did not return valid structured data.")
     return message.parsed
+
+
+# Everything the UI should catch and show as a message instead of a traceback.
+LLM_ERRORS = (MissingAPIKeyError, StructuredOutputError, openai.OpenAIError)
+
+
+def friendly_error(exc: Exception) -> str:
+    """Turn SDK exceptions into a message a student can act on."""
+    if isinstance(exc, openai.AuthenticationError):
+        return "OpenAI rejected the API key. Check that it is correct and still active."
+    if isinstance(exc, openai.RateLimitError):
+        if getattr(exc, "code", None) == "insufficient_quota":
+            return "This API key has run out of credit. Check your OpenAI billing settings."
+        return "Too many requests right now. Wait a few seconds and try again."
+    if isinstance(exc, openai.NotFoundError):
+        return (
+            f"The model '{get_settings().chat_model}' was not found. "
+            "Set OPENAI_MODEL to a model your key can use."
+        )
+    if isinstance(exc, openai.APITimeoutError):
+        return "OpenAI took too long to answer. Please try again."
+    if isinstance(exc, openai.APIConnectionError):
+        return "Couldn't reach OpenAI. Check your internet connection."
+    if isinstance(exc, openai.BadRequestError):
+        return f"OpenAI couldn't process the request: {exc.message}"
+    if isinstance(exc, openai.APIStatusError):
+        return f"OpenAI returned an error ({exc.status_code}). Please try again later."
+    return str(exc) or exc.__class__.__name__

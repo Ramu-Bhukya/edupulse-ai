@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import httpx2
+import openai
 import pytest
 from streamlit.testing.v1 import AppTest
 
@@ -157,3 +159,37 @@ def test_welcome_message_only_when_empty(fake_llm):
     assert any("Hi! I'm your" in info.value for info in at.info)
     at.chat_input[0].set_value("Hello").run()
     assert not any("Hi! I'm your" in info.value for info in at.info)
+
+
+def test_api_errors_are_shown_not_raised(monkeypatch):
+    class BrokenCompletions:
+        def create(self, **kwargs):
+            request = httpx2.Request("POST", "https://api.openai.com/v1/chat/completions")
+            response = httpx2.Response(401, request=request)
+            raise openai.AuthenticationError("bad key", response=response, body=None)
+
+    client = FakeOpenAI()
+    client.chat.completions = BrokenCompletions()
+    monkeypatch.setattr(llm, "get_client", lambda api_key=None: client)
+
+    at = run_app()
+    at.chat_input[0].set_value("Hello?").run()
+    assert not at.exception
+    assert "rejected the API key" in at.error[0].value
+    assert at.session_state.messages == []
+
+
+def test_sidebar_key_is_passed_to_client(monkeypatch):
+    seen = []
+    client = FakeOpenAI()
+
+    def fake_get_client(api_key=None):
+        seen.append(api_key)
+        return client
+
+    monkeypatch.setattr(llm, "get_client", fake_get_client)
+    at = run_app()
+    at.sidebar.text_input[0].input("sk-user-supplied-key").run()
+    at.chat_input[0].set_value("Hello?").run()
+    assert seen[-1] == "sk-user-supplied-key"
+    assert "sk-...-key" in at.sidebar.caption[-1].value
