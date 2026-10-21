@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import random
 from dataclasses import dataclass
 
@@ -198,3 +200,56 @@ def grade_quiz(quiz: Quiz, answers: list[int | None]) -> QuizResult:
     return QuizResult(
         correct=[a == q.correct_index for q, a in zip(quiz.questions, answers, strict=True)]
     )
+
+
+# --- flashcards ------------------------------------------------------------------
+
+
+class Flashcard(BaseModel):
+    term: str
+    definition: str
+
+
+class FlashcardDeck(BaseModel):
+    cards: list[Flashcard]
+
+
+FLASHCARD_PROMPT = (
+    "You make revision flashcards from the study material. Use ONLY the material provided. "
+    "Write exactly {n} cards about its most important terms and concepts. 'term' is the key "
+    "term or a short question (at most 8 words). 'definition' explains it in one or two "
+    "plain sentences. Don't repeat a term."
+)
+
+
+def validate_deck(deck: FlashcardDeck, n: int) -> FlashcardDeck:
+    """Strip whitespace, drop empty or duplicate cards, keep at most n."""
+    seen, cards = set(), []
+    for card in deck.cards:
+        term, definition = card.term.strip(), card.definition.strip()
+        if not term or not definition or term.lower() in seen:
+            continue
+        seen.add(term.lower())
+        cards.append(Flashcard(term=term, definition=definition))
+    if not cards:
+        raise StructuredOutputError("The model didn't return any usable flashcards.")
+    return FlashcardDeck(cards=cards[:n])
+
+
+def generate_flashcards(client: OpenAI, chunks: list[Chunk], n: int = 10) -> FlashcardDeck:
+    if not chunks:
+        raise ValueError("No study material to build flashcards from.")
+    messages = [
+        {"role": "system", "content": FLASHCARD_PROMPT.format(n=n)},
+        {"role": "user", "content": f"Study material:\n\n{format_chunks(chunks)}"},
+    ]
+    return validate_deck(parse_structured(client, messages, FlashcardDeck), n)
+
+
+def deck_to_csv(deck: FlashcardDeck) -> str:
+    """Two-column CSV (term, definition) that Anki and Quizlet can import."""
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    for card in deck.cards:
+        writer.writerow([card.term, card.definition])
+    return buffer.getvalue()

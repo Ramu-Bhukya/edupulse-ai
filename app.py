@@ -1,4 +1,6 @@
+import html
 import json
+import random
 from datetime import datetime
 
 import streamlit as st
@@ -17,7 +19,14 @@ from edupulse.prompts import (
     build_user_prompt,
 )
 from edupulse.rag_engine import answer_stream, is_idk
-from edupulse.study_tools import generate_quiz, grade_quiz, sample_context, summarize_takeaways
+from edupulse.study_tools import (
+    deck_to_csv,
+    generate_flashcards,
+    generate_quiz,
+    grade_quiz,
+    sample_context,
+    summarize_takeaways,
+)
 from edupulse.text_utils import escape_markdown, highlight_terms
 from edupulse.vector_store import VectorStore, document_id
 
@@ -25,6 +34,28 @@ MAX_MATERIAL_CHARS = 8000
 MAX_HISTORY = 10
 MAX_CONTEXT_MESSAGES = 10
 AVATARS = {"user": "🧑‍🎓", "assistant": "🎓"}
+
+CARD_CSS = """
+<style>
+.flashcard {
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 2rem;
+    border-radius: 16px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+    margin-bottom: 1rem;
+}
+.flashcard .side { font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; }
+.flashcard .content { font-size: 1.5rem; margin-top: 0.75rem; }
+.flashcard.front { background: #eef2ff; color: #1e1b4b; }
+.flashcard.back { background: #ecfdf5; color: #064e3b; }
+.flashcard.back .content { font-size: 1.15rem; }
+</style>
+"""
 
 st.set_page_config(page_title="EduPulse AI", page_icon="📚", layout="wide")
 
@@ -49,6 +80,11 @@ if "quiz" not in st.session_state:
     st.session_state.quiz_answers = []
     st.session_state.quiz_submitted = False
     st.session_state.quiz_round = 0  # bumped for every new quiz so radio keys reset
+if "deck" not in st.session_state:
+    st.session_state.deck = None
+    st.session_state.card_order = []
+    st.session_state.card_pos = 0
+    st.session_state.card_flipped = False
 
 
 @st.cache_resource
@@ -67,6 +103,7 @@ def set_document(info) -> None:
     st.session_state.document = info
     st.session_state.search_results = None
     st.session_state.quiz = None
+    st.session_state.deck = None
 
 
 def result_as_text(result: dict) -> str:
@@ -366,6 +403,77 @@ with cards_tab:
     else:
         doc = st.session_state.document
         st.write(f"Key terms and definitions from **{doc.filename}**.")
+        with st.form("cards_settings"):
+            topic_col, count_col = st.columns([3, 1])
+            card_topic = topic_col.text_input(
+                "Focus on a topic (optional)",
+                key="cards_topic",
+                placeholder="e.g. organelles",
+            )
+            n_cards = count_col.number_input(
+                "Cards", min_value=5, max_value=20, value=10, key="cards_n"
+            )
+            make_cards = st.form_submit_button("Generate flashcards", type="primary")
+        if make_cards:
+            try:
+                with st.spinner("Making your flashcards..."):
+                    client = get_client(user_key)
+                    chunks = sample_context(
+                        store, OpenAIEmbedder(client), doc.doc_id, card_topic
+                    )
+                    deck = generate_flashcards(client, chunks, n=int(n_cards))
+                st.session_state.deck = deck
+                st.session_state.card_order = list(range(len(deck.cards)))
+                st.session_state.card_pos = 0
+                st.session_state.card_flipped = False
+            except LLM_ERRORS as exc:
+                st.error(friendly_error(exc))
+
+        deck = st.session_state.deck
+        if deck:
+            st.markdown(CARD_CSS, unsafe_allow_html=True)
+            order = st.session_state.card_order
+            pos = st.session_state.card_pos
+            card = deck.cards[order[pos]]
+            flipped = st.session_state.card_flipped
+            side, text = ("Definition", card.definition) if flipped else ("Term", card.term)
+            st.markdown(
+                f'<div class="flashcard {"back" if flipped else "front"}">'
+                f'<div class="side">{side}</div>'
+                f'<div class="content">{html.escape(text)}</div></div>',
+                unsafe_allow_html=True,
+            )
+            st.caption(f"Card {pos + 1} of {len(order)}")
+
+            prev_col, flip_col, next_col, shuffle_col = st.columns(4)
+            if prev_col.button("◀ Prev", key="card_prev", disabled=pos == 0, width="stretch"):
+                st.session_state.card_pos -= 1
+                st.session_state.card_flipped = False
+                st.rerun()
+            if flip_col.button("Flip", key="card_flip", type="primary", width="stretch"):
+                st.session_state.card_flipped = not flipped
+                st.rerun()
+            if next_col.button(
+                "Next ▶", key="card_next", disabled=pos == len(order) - 1, width="stretch"
+            ):
+                st.session_state.card_pos += 1
+                st.session_state.card_flipped = False
+                st.rerun()
+            if shuffle_col.button("Shuffle", key="card_shuffle", width="stretch"):
+                random.shuffle(st.session_state.card_order)
+                st.session_state.card_pos = 0
+                st.session_state.card_flipped = False
+                st.rerun()
+
+            with st.expander(f"All {len(deck.cards)} cards"):
+                for c in deck.cards:
+                    st.markdown(f"**{escape_markdown(c.term)}**: {escape_markdown(c.definition)}")
+                st.download_button(
+                    "Download for Anki / Quizlet (.csv)",
+                    data=deck_to_csv(deck),
+                    file_name="edupulse_flashcards.csv",
+                    mime="text/csv",
+                )
 
 # --- Search -------------------------------------------------------------------
 with search_tab:

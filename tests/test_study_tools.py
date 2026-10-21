@@ -5,16 +5,21 @@ import pytest
 from edupulse.chunker import Chunk
 from edupulse.llm import StructuredOutputError
 from edupulse.study_tools import (
+    Flashcard,
+    FlashcardDeck,
     KeyTakeaways,
     Quiz,
     QuizQuestion,
+    deck_to_csv,
     evenly_spaced,
     format_chunks,
+    generate_flashcards,
     generate_quiz,
     grade_quiz,
     sample_context,
     shuffle_options,
     summarize_takeaways,
+    validate_deck,
     validate_quiz,
 )
 from edupulse.vector_store import VectorStore
@@ -159,3 +164,45 @@ def test_grade_quiz_needs_one_answer_per_question():
     quiz = Quiz(questions=[QuizQuestion(**question())])
     with pytest.raises(ValueError):
         grade_quiz(quiz, [0, 1])
+
+
+# --- flashcards ------------------------------------------------------------------
+
+
+def test_validate_deck_cleans_and_dedupes():
+    deck = FlashcardDeck(
+        cards=[
+            Flashcard(term=" ATP ", definition=" Energy currency. "),
+            Flashcard(term="atp", definition="Duplicate term."),
+            Flashcard(term="Osmosis", definition="  "),
+            Flashcard(term="Mitosis", definition="Division into two identical cells."),
+        ]
+    )
+    result = validate_deck(deck, n=10)
+    assert [(c.term, c.definition) for c in result.cards] == [
+        ("ATP", "Energy currency."),
+        ("Mitosis", "Division into two identical cells."),
+    ]
+
+
+def test_validate_deck_limit_and_empty():
+    deck = FlashcardDeck(cards=[Flashcard(term=f"T{i}", definition="d") for i in range(12)])
+    assert len(validate_deck(deck, n=10).cards) == 10
+    with pytest.raises(StructuredOutputError):
+        validate_deck(FlashcardDeck(cards=[]), n=10)
+
+
+def test_generate_flashcards(fake_client):
+    fake_client.chat.completions.parsed = {
+        "cards": [{"term": "Nucleus", "definition": "Stores DNA."}]
+    }
+    deck = generate_flashcards(fake_client, [Chunk("The nucleus stores DNA.", 0, 1, 1)], n=8)
+    assert deck.cards == [Flashcard(term="Nucleus", definition="Stores DNA.")]
+    call = fake_client.chat.completions.calls[0]
+    assert call["response_format"] is FlashcardDeck
+    assert "exactly 8 cards" in call["messages"][0]["content"]
+
+
+def test_deck_to_csv_quotes_commas():
+    deck = FlashcardDeck(cards=[Flashcard(term="ATP", definition="Made in glycolysis, Krebs.")])
+    assert deck_to_csv(deck).strip() == 'ATP,"Made in glycolysis, Krebs."'

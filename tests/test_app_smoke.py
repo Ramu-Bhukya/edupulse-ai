@@ -387,3 +387,56 @@ def test_quiz_retry_resets_answers(fake_rag, fake_llm):
     assert not at.session_state.quiz_submitted
     assert at.session_state.quiz_round == old_round + 1
     assert all(r.value is None for r in at.radio)
+
+
+DECK = {
+    "cards": [
+        {"term": "Mitochondria", "definition": "Make most of the cell's ATP."},
+        {"term": "Ribosome", "definition": "Builds proteins from mRNA."},
+        {"term": "Osmosis", "definition": "Diffusion of water across a membrane."},
+    ]
+}
+
+
+def make_deck(fake_llm) -> AppTest:
+    fake_llm.chat.completions.parsed = DECK
+    at = upload_sample(run_app())
+    at.button(key="FormSubmitter:cards_settings-Generate flashcards").click().run()
+    assert not at.exception
+    return at
+
+
+def card_html(at: AppTest) -> str:
+    return next(md.value for md in at.markdown if 'class="flashcard' in md.value)
+
+
+def test_flashcards_flip_and_navigate(fake_rag, fake_llm):
+    at = make_deck(fake_llm)
+    assert "Mitochondria" in card_html(at)
+    assert at.button(key="card_prev").disabled
+
+    at.button(key="card_flip").click().run()
+    assert "cell&#x27;s ATP" in card_html(at)  # definition side, HTML-escaped
+    assert "back" in card_html(at)
+
+    at.button(key="card_next").click().run()
+    assert "Ribosome" in card_html(at)  # next card starts on the term side
+    at.button(key="card_next").click().run()
+    assert at.button(key="card_next").disabled
+    assert any("Card 3 of 3" in c.value for c in at.caption)
+
+
+def test_flashcards_shuffle_keeps_all_cards(fake_rag, fake_llm):
+    at = make_deck(fake_llm)
+    at.button(key="card_shuffle").click().run()
+    assert sorted(at.session_state.card_order) == [0, 1, 2]
+    assert at.session_state.card_pos == 0
+
+
+def test_new_document_clears_quiz_and_cards(fake_rag, fake_llm):
+    at = make_deck(fake_llm)
+    at.sidebar.file_uploader[0].upload(
+        "other.pdf", SAMPLE.read_bytes() + b"%%changed", "application/pdf"
+    ).run()
+    assert at.session_state.deck is None
+    assert at.session_state.quiz is None
