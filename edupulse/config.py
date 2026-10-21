@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DEFAULT_CHAT_MODEL = "gpt-4o-mini"
+DEFAULT_EMBED_MODEL = "text-embedding-3-small"
 
 
 class MissingAPIKeyError(RuntimeError):
@@ -26,6 +27,7 @@ class MissingAPIKeyError(RuntimeError):
 @dataclass(frozen=True)
 class Settings:
     chat_model: str
+    embed_model: str
     temperature: float
 
 
@@ -36,6 +38,7 @@ def get_settings() -> Settings:
         temperature = 0.3
     return Settings(
         chat_model=os.getenv("OPENAI_MODEL", DEFAULT_CHAT_MODEL),
+        embed_model=os.getenv("EMBED_MODEL", DEFAULT_EMBED_MODEL),
         temperature=temperature,
     )
 

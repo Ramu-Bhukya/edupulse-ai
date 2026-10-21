@@ -8,6 +8,7 @@ def clean_env(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_MODEL", raising=False)
     monkeypatch.delenv("OPENAI_TEMPERATURE", raising=False)
+    monkeypatch.delenv("EMBED_MODEL", raising=False)
 
 
 def test_missing_key_raises():
@@ -33,6 +34,7 @@ def test_blank_override_falls_back_to_env(monkeypatch):
 def test_settings_defaults():
     settings = config.get_settings()
     assert settings.chat_model == config.DEFAULT_CHAT_MODEL
+    assert settings.embed_model == config.DEFAULT_EMBED_MODEL
     assert settings.temperature == 0.3
 
 

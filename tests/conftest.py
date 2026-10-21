@@ -37,9 +37,27 @@ class FakeCompletions:
         yield SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=None))])
 
 
+class FakeEmbeddings:
+    """Returns tiny deterministic vectors so tests can check order and batching."""
+
+    def __init__(self):
+        self.calls: list[dict] = []
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        inputs = kwargs["input"]
+        data = [
+            SimpleNamespace(index=i, embedding=[float(len(text)), float(i)])
+            for i, text in enumerate(inputs)
+        ]
+        # the real API doesn't promise order, so hand the items back reversed
+        return SimpleNamespace(data=list(reversed(data)))
+
+
 class FakeOpenAI:
     def __init__(self, reply: str = "fake reply"):
         self.chat = SimpleNamespace(completions=FakeCompletions(reply))
+        self.embeddings = FakeEmbeddings()
 
 
 @pytest.fixture
