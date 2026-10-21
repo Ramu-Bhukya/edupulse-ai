@@ -21,28 +21,19 @@ def test_sidebar_lists_presets():
     assert "Socratic" in at.sidebar.selectbox[1].options
 
 
-def test_add_topic_requires_text():
+def test_generate_requires_material():
     at = run_app()
-    at.button(key="add_topic").click().run()
+    at.button(key="generate").click().run()
     assert at.warning
+    assert at.session_state.generated is None
 
 
-def test_topics_persist_in_session_state():
+def test_generate_builds_prompt():
     at = run_app()
-    at.text_input[0].input("Biology").run()
-    at.button(key="add_topic").click().run()
-    assert at.session_state.topics == ["Biology"]
-    assert at.metric[0].value == "1"
-
-    # adding the same topic again should not duplicate it
-    at.button(key="add_topic").click().run()
-    assert at.session_state.topics == ["Biology"]
-    assert at.info
-
-
-def test_clear_list():
-    at = run_app()
-    at.text_input[0].input("Chemistry").run()
-    at.button(key="add_topic").click().run()
-    at.button(key="clear_topics").click().run()
-    assert at.session_state.topics == []
+    at.sidebar.selectbox[0].select("Medical Tutor").run()
+    at.text_area[0].input("The heart has four chambers.").run()
+    at.button(key="generate").click().run()
+    result = at.session_state.generated
+    assert result["persona"] == "Medical Tutor"
+    assert "The heart has four chambers." in result["user"]
+    assert len(at.code) == 2

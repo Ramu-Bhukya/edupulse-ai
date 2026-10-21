@@ -1,49 +1,58 @@
 import streamlit as st
 
-from edupulse.presets import load_presets
+from edupulse.presets import find_by_name, load_presets
+from edupulse.prompts import TASKS, build_system_prompt, build_user_prompt
 
 st.set_page_config(page_title="EduPulse AI", page_icon="📚", layout="wide")
 
 personas, tones = load_presets()
 
-# Session state survives reruns, so the list doesn't reset on every click.
-if "topics" not in st.session_state:
-    st.session_state.topics = []
+if "generated" not in st.session_state:
+    st.session_state.generated = None
 
 with st.sidebar:
     st.header("Settings")
-    persona_name = st.selectbox("Tutor persona", [p.name for p in personas])
+    persona_name = st.selectbox("AI persona", [p.name for p in personas])
     tone_name = st.selectbox("Tone", [t.name for t in tones])
-    st.caption(next(p.description for p in personas if p.name == persona_name))
+    persona = find_by_name(personas, persona_name)
+    tone = find_by_name(tones, tone_name)
+    st.caption(persona.description)
 
 st.title("EduPulse AI")
-st.write("Your personal AI study companion.")
+st.subheader("Prompt Architect")
+st.write(
+    "Paste some study material, pick a persona and a tone, and EduPulse builds "
+    "a ready-to-use prompt for it."
+)
 
-home_tab, topics_tab = st.tabs(["Home", "Study list"])
+left, right = st.columns(2)
 
-with home_tab:
-    left, right = st.columns([2, 1])
-    with left:
-        subject = st.text_input("What are you studying today?")
-        if st.button("Add to study list", key="add_topic"):
-            subject = subject.strip()
-            if not subject:
-                st.warning("Type a subject first.")
-            elif subject in st.session_state.topics:
-                st.info(f"{subject} is already on your list.")
-            else:
-                st.session_state.topics.append(subject)
-                st.success(f"Added {subject} to your study list!")
-    with right:
-        st.metric("Topics on your list", len(st.session_state.topics))
-        st.write(f"**Persona:** {persona_name}  \n**Tone:** {tone_name}")
+with left:
+    material = st.text_area(
+        "Study material",
+        height=300,
+        placeholder="Paste a paragraph from your notes or textbook...",
+    )
+    task = st.selectbox("What should the AI do?", list(TASKS))
+    if st.button("Generate", type="primary", key="generate"):
+        if not material.strip():
+            st.warning("Paste some study material first.")
+        else:
+            st.session_state.generated = {
+                "task": task,
+                "persona": persona.name,
+                "tone": tone.name,
+                "system": build_system_prompt(persona, tone),
+                "user": build_user_prompt(task, material),
+            }
 
-with topics_tab:
-    if st.session_state.topics:
-        for i, topic in enumerate(st.session_state.topics, start=1):
-            st.write(f"{i}. {topic}")
-        if st.button("Clear list", key="clear_topics"):
-            st.session_state.topics = []
-            st.rerun()
+with right:
+    result = st.session_state.generated
+    if result:
+        st.markdown(f"**{result['task']}** · {result['persona']} · {result['tone']}")
+        st.caption("System prompt")
+        st.code(result["system"], language=None, wrap_lines=True)
+        st.caption("User prompt")
+        st.code(result["user"], language=None, wrap_lines=True)
     else:
-        st.info("Your study list is empty. Add a topic on the Home tab.")
+        st.info("Your generated prompt will appear here.")
