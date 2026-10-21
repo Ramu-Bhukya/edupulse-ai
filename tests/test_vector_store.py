@@ -74,3 +74,26 @@ def test_index_survives_reopening(tmp_path, keyword_embedder):
     index_sample(VectorStore.persistent(path), keyword_embedder)
     reopened = VectorStore.persistent(path)
     assert reopened.get_document("abc123").filename == "cells.pdf"
+
+
+def test_search_returns_best_match_first(store, keyword_embedder):
+    index_sample(store, keyword_embedder)
+    query = keyword_embedder.embed_query("Where is DNA stored? In the nucleus")
+    results = store.search("abc123", query, k=3)
+    assert len(results) == 3
+    assert "nucleus" in results[0].chunk.text
+    assert results[0].chunk.page_label == "pp. 1-2"
+    similarities = [r.similarity for r in results]
+    assert similarities == sorted(similarities, reverse=True)
+
+
+def test_search_k_larger_than_collection(store, keyword_embedder):
+    index_sample(store, keyword_embedder)
+    results = store.search("abc123", keyword_embedder.embed_query("water"), k=10)
+    assert len(results) == 3
+    assert "Osmosis" in results[0].chunk.text
+
+
+def test_search_top_k(store, keyword_embedder):
+    index_sample(store, keyword_embedder)
+    assert len(store.search("abc123", keyword_embedder.embed_query("ATP"), k=1)) == 1

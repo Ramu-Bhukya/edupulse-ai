@@ -27,6 +27,16 @@ def document_id(data: bytes) -> str:
 
 
 @dataclass(frozen=True)
+class SearchResult:
+    chunk: Chunk
+    distance: float  # cosine distance: 0 = same direction, 2 = opposite
+
+    @property
+    def similarity(self) -> float:
+        return 1.0 - self.distance
+
+
+@dataclass(frozen=True)
 class DocumentInfo:
     doc_id: str
     filename: str
@@ -135,6 +145,29 @@ class VectorStore:
             for text, meta in zip(result["documents"], result["metadatas"], strict=True)
         ]
         return sorted(chunks, key=lambda c: c.index)
+
+    # --- search ---------------------------------------------------------------
+
+    def search(self, doc_id: str, query_embedding: list[float], k: int = 3) -> list[SearchResult]:
+        """Return the k chunks closest to the query, best match first."""
+        collection = self._collection(doc_id)
+        count = collection.count()
+        if count == 0:
+            return []
+        result = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=max(1, min(k, count)),
+            include=["documents", "metadatas", "distances"],
+        )
+        return [
+            SearchResult(chunk=_to_chunk(text, meta), distance=float(distance))
+            for text, meta, distance in zip(
+                result["documents"][0],
+                result["metadatas"][0],
+                result["distances"][0],
+                strict=True,
+            )
+        ]
 
 
 def _to_chunk(text: str, meta: dict) -> Chunk:
