@@ -1,5 +1,8 @@
 """Shared test helpers: a fake OpenAI client that never touches the network."""
 
+import math
+import re
+import zlib
 from types import SimpleNamespace
 
 import pytest
@@ -63,3 +66,37 @@ class FakeOpenAI:
 @pytest.fixture
 def fake_client():
     return FakeOpenAI()
+
+
+class KeywordEmbedder:
+    """Bag-of-words "embeddings": texts sharing words end up close together.
+
+    Good enough to test similarity search without calling an API.
+    """
+
+    dims = 256
+
+    def __init__(self):
+        self.calls = 0
+
+    def _vector(self, text: str) -> list[float]:
+        vec = [0.0] * self.dims
+        for word in re.findall(r"[a-z]+", text.lower()):
+            vec[zlib.crc32(word.encode()) % self.dims] += 1.0
+        norm = math.sqrt(sum(v * v for v in vec)) or 1.0
+        return [v / norm for v in vec]
+
+    def embed(self, texts, on_progress=None):
+        self.calls += 1
+        vectors = [self._vector(t) for t in texts]
+        if on_progress:
+            on_progress(len(texts), len(texts))
+        return vectors
+
+    def embed_query(self, text):
+        return self._vector(text)
+
+
+@pytest.fixture
+def keyword_embedder():
+    return KeywordEmbedder()
