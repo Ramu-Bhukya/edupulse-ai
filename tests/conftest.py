@@ -9,6 +9,16 @@ class FakeCompletions:
     def __init__(self, reply: str):
         self.reply = reply
         self.calls: list[dict] = []
+        # what .parse() returns: a dict validated against response_format
+        self.parsed: dict | None = None
+        self.refusal: str | None = None
+
+    def parse(self, **kwargs):
+        self.calls.append(kwargs)
+        model = kwargs["response_format"]
+        parsed = None if self.parsed is None else model.model_validate(self.parsed)
+        message = SimpleNamespace(parsed=parsed, refusal=self.refusal, content=None)
+        return SimpleNamespace(choices=[SimpleNamespace(message=message)])
 
     def create(self, **kwargs):
         self.calls.append(kwargs)

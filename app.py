@@ -4,7 +4,7 @@ from datetime import datetime
 import streamlit as st
 
 from edupulse.config import MissingAPIKeyError
-from edupulse.llm import complete, get_client, stream_chat
+from edupulse.llm import StructuredOutputError, complete, get_client, stream_chat
 from edupulse.presets import find_by_name, load_presets
 from edupulse.prompts import (
     TASKS,
@@ -12,6 +12,7 @@ from edupulse.prompts import (
     build_system_prompt,
     build_user_prompt,
 )
+from edupulse.study_tools import summarize_takeaways
 
 MAX_MATERIAL_CHARS = 8000
 MAX_HISTORY = 10
@@ -27,6 +28,8 @@ if "history" not in st.session_state:
     st.session_state.history = []
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "takeaways" not in st.session_state:
+    st.session_state.takeaways = None
 
 
 def result_as_text(result: dict) -> str:
@@ -51,13 +54,30 @@ chat_tab, architect_tab = st.tabs(["Chat", "Prompt Architect"])
 
 # --- Chat -------------------------------------------------------------------
 with chat_tab:
-    caption_col, clear_col = st.columns([4, 1])
+    caption_col, takeaways_col, clear_col = st.columns([3, 1, 1])
     caption_col.caption(
         f"Chatting with the **{persona.name}** in a **{tone.name.lower()}** tone."
     )
+    if takeaways_col.button("Key takeaways", key="get_takeaways"):
+        if not st.session_state.messages:
+            st.info("Ask a few questions first, then I can summarize them.")
+        else:
+            try:
+                with st.spinner("Summarizing the conversation..."):
+                    st.session_state.takeaways = summarize_takeaways(
+                        get_client(), st.session_state.messages
+                    )
+            except (MissingAPIKeyError, StructuredOutputError) as exc:
+                st.error(str(exc))
     if clear_col.button("Clear chat", key="clear_chat"):
         st.session_state.messages = []
+        st.session_state.takeaways = None
         st.rerun()
+
+    if st.session_state.takeaways:
+        with st.expander(f"Key takeaways: {st.session_state.takeaways.title}", expanded=True):
+            for point in st.session_state.takeaways.points:
+                st.markdown(f"- {point}")
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):

@@ -123,3 +123,20 @@ def test_chat_without_key_does_not_store_question(monkeypatch):
     at.chat_input[0].set_value("Hello?").run()
     assert at.session_state.messages == []
     assert "API key" in at.error[0].value
+
+
+def test_key_takeaways_needs_conversation(fake_llm):
+    at = run_app()
+    at.button(key="get_takeaways").click().run()
+    assert at.info
+    assert at.session_state.takeaways is None
+
+
+def test_key_takeaways_rendered_from_structured_output(fake_llm):
+    fake_llm.chat.completions.parsed = {"title": "Heart", "points": ["Four chambers."]}
+    at = run_app()
+    at.chat_input[0].set_value("What is a ventricle?").run()
+    at.button(key="get_takeaways").click().run()
+    assert not at.exception
+    assert at.session_state.takeaways.points == ["Four chambers."]
+    assert any("Four chambers." in md.value for md in at.markdown)
