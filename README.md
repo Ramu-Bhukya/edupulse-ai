@@ -143,6 +143,44 @@ cd frontend && npm run build
 The tests use a fake OpenAI client and a bag-of-words fake embedder, and drive the Streamlit
 app with `streamlit.testing.v1.AppTest` (uploads, chat, quiz, flashcards).
 
+## Deployment
+
+### Streamlit Community Cloud (free)
+
+1. Push the repository to GitHub.
+2. Go to [share.streamlit.io](https://share.streamlit.io), click **Create app** and pick the
+   repo, branch `main` and main file `app.py`.
+3. Under **Advanced settings**, choose Python **3.12** and paste your secrets
+   (see `.streamlit/secrets.toml.example`):
+   ```toml
+   OPENAI_API_KEY = "sk-..."
+   ```
+4. Deploy. Streamlit Cloud installs `requirements.txt` only, so the API/test packages stay out.
+
+Notes:
+- If you leave `OPENAI_API_KEY` out of the secrets, visitors have to paste their own key in
+  the sidebar. Use this for a public demo so strangers can't spend your credits.
+- The app's disk is temporary on Streamlit Cloud, so indexed documents disappear when the app
+  restarts or sleeps. Uploading the PDF again rebuilds the index.
+- If the logs say *"unsupported version of sqlite3"*, add `pysqlite3-binary` to
+  `requirements.txt`; `edupulse/__init__.py` switches to it automatically.
+
+### React + API as one service
+
+After `npm run build`, FastAPI also serves `frontend/dist`, so a single web service is enough
+(e.g. Render or Railway):
+
+```bash
+# build command
+pip install -r requirements-api.txt && cd frontend && npm ci && npm run build
+# start command
+uvicorn api.main:app --host 0.0.0.0 --port $PORT
+```
+
+Set `OPENAI_API_KEY` in the host's environment. To host the front end separately instead,
+build it with `VITE_API_BASE=https://your-api.example.com` and add that site's URL to
+`CORS_ORIGINS` on the API.
+
 ## Built step by step
 
 The project followed a 30-day plan, and each weekly milestone is tagged in git:

@@ -5,17 +5,22 @@ ends share one document index and one set of prompts.
 
 Run locally:
     uvicorn api.main:app --reload --port 8000
+
+If the React app has been built (frontend/dist), it is served from "/" too,
+so frontend and API can be deployed as a single service.
 """
 
 import json
 import os
 from collections.abc import Iterator
 from functools import lru_cache
+from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
@@ -38,6 +43,7 @@ from edupulse.study_tools import (
 from edupulse.vector_store import DocumentInfo, VectorStore
 
 MAX_UPLOAD_MB = 25
+FRONTEND_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 MAX_CONTEXT_MESSAGES = 10
 
 app = FastAPI(title="EduPulse AI API", version=__version__)
@@ -239,3 +245,8 @@ def flashcards(doc_id: str, body: GenerateRequest, store: Store, ai: AI) -> Flas
         return generate_flashcards(client, chunks, n=body.n)
     except LLM_ERRORS as exc:
         raise llm_error(exc) from exc
+
+
+# Mounted last so every /api route above takes precedence.
+if FRONTEND_DIST.is_dir():
+    app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")

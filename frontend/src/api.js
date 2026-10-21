@@ -1,5 +1,9 @@
 // Small wrapper around the FastAPI backend (see api/main.py).
 
+// Empty by default: in development Vite proxies /api, and in production the
+// API serves the built app itself. Set VITE_API_BASE when they live apart.
+const BASE = import.meta.env.VITE_API_BASE ?? ''
+
 function headers(apiKey, json = true) {
   const h = {}
   if (json) h['Content-Type'] = 'application/json'
@@ -20,7 +24,7 @@ async function toError(response) {
 }
 
 async function request(path, { apiKey, method = 'GET', body } = {}) {
-  const response = await fetch(path, {
+  const response = await fetch(BASE + path, {
     method,
     headers: headers(apiKey, body !== undefined),
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -44,7 +48,7 @@ export const generateFlashcards = (docId, { topic, n }, apiKey) =>
 export async function uploadDocument(file, apiKey) {
   const form = new FormData()
   form.append('file', file)
-  const response = await fetch('/api/documents', {
+  const response = await fetch(`${BASE}/api/documents`, {
     method: 'POST',
     headers: headers(apiKey, false),
     body: form,
@@ -58,7 +62,7 @@ export async function uploadDocument(file, apiKey) {
  * Calls onSources once, then onToken for every chunk of text.
  */
 export async function streamChat(body, { apiKey, onSources, onToken, signal }) {
-  const response = await fetch('/api/chat', {
+  const response = await fetch(`${BASE}/api/chat`, {
     method: 'POST',
     headers: headers(apiKey),
     body: JSON.stringify(body),

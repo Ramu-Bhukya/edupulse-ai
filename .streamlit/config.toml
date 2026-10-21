@@ -1,0 +1,9 @@
+[theme]
+primaryColor = "#4f46e5"
+
+[server]
+# keep in line with the API's MAX_UPLOAD_MB
+maxUploadSize = 25
+
+[browser]
+gatherUsageStats = false
