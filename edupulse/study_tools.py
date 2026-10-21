@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+from dataclasses import dataclass
 
 from openai import OpenAI
 from pydantic import BaseModel
@@ -171,3 +172,29 @@ def generate_quiz(
         {"role": "user", "content": f"Study material:\n\n{format_chunks(chunks)}"},
     ]
     return validate_quiz(parse_structured(client, messages, Quiz), n, rng)
+
+
+@dataclass(frozen=True)
+class QuizResult:
+    correct: list[bool]
+
+    @property
+    def score(self) -> int:
+        return sum(self.correct)
+
+    @property
+    def total(self) -> int:
+        return len(self.correct)
+
+    @property
+    def percent(self) -> float:
+        return self.score / self.total if self.total else 0.0
+
+
+def grade_quiz(quiz: Quiz, answers: list[int | None]) -> QuizResult:
+    """Compare the chosen option indexes with the answer key (None = unanswered)."""
+    if len(answers) != len(quiz.questions):
+        raise ValueError(f"Expected {len(quiz.questions)} answers, got {len(answers)}")
+    return QuizResult(
+        correct=[a == q.correct_index for q, a in zip(quiz.questions, answers, strict=True)]
+    )

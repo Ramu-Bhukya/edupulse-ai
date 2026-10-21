@@ -323,3 +323,67 @@ def test_main_tabs():
     labels = [tab.label for tab in at.tabs]
     assert labels[:3] == ["💬 Chat with Notes", "📝 Quiz Generator", "🃏 Flashcards"]
     assert any("quiz you on it" in info.value for info in at.info)
+
+
+QUIZ = {
+    "questions": [
+        {
+            "question": f"Question {i}?",
+            "options": ["Right", "Wrong A", "Wrong B", "Wrong C"],
+            "correct_index": 0,
+            "explanation": "Because the notes say so.",
+        }
+        for i in range(5)
+    ]
+}
+
+
+def make_quiz(fake_llm) -> AppTest:
+    fake_llm.chat.completions.parsed = QUIZ
+    at = upload_sample(run_app())
+    at.button(key="FormSubmitter:quiz_settings-Generate quiz").click().run()
+    assert not at.exception
+    return at
+
+
+def answer_quiz(at: AppTest, choose) -> AppTest:
+    quiz = at.session_state.quiz
+    for i, q in enumerate(quiz.questions):
+        at.radio(key=f"quiz_{at.session_state.quiz_round}_{i}").set_value(choose(q))
+    return at.button(key="FormSubmitter:quiz_answers_form-Check answers").click().run()
+
+
+def test_generate_quiz_shows_questions(fake_rag, fake_llm):
+    at = make_quiz(fake_llm)
+    assert len(at.session_state.quiz.questions) == 5
+    assert len(at.radio) == 5
+    assert "Study material" in fake_llm.chat.completions.calls[-1]["messages"][1]["content"]
+
+
+def test_quiz_must_be_fully_answered(fake_rag, fake_llm):
+    at = make_quiz(fake_llm)
+    at.button(key="FormSubmitter:quiz_answers_form-Check answers").click().run()
+    assert any("Answer every question" in w.value for w in at.warning)
+    assert not at.session_state.quiz_submitted
+
+
+def test_quiz_grading(fake_rag, fake_llm):
+    at = make_quiz(fake_llm)
+    # right answer on the first three questions only
+    picks = iter([True, True, True, False, False])
+    at = answer_quiz(
+        at, lambda q: q.correct_index if next(picks) else (q.correct_index + 1) % 4
+    )
+    assert at.session_state.quiz_submitted
+    assert at.main.metric[0].value == "3 / 5"
+    assert len(at.main.success) == 3
+    assert sum("Not quite" in e.value for e in at.main.error) == 2
+
+
+def test_quiz_retry_resets_answers(fake_rag, fake_llm):
+    at = answer_quiz(make_quiz(fake_llm), lambda q: q.correct_index)
+    old_round = at.session_state.quiz_round
+    at.button(key="quiz_retry").click().run()
+    assert not at.session_state.quiz_submitted
+    assert at.session_state.quiz_round == old_round + 1
+    assert all(r.value is None for r in at.radio)

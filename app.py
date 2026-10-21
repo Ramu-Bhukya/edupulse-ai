@@ -17,7 +17,7 @@ from edupulse.prompts import (
     build_user_prompt,
 )
 from edupulse.rag_engine import answer_stream, is_idk
-from edupulse.study_tools import summarize_takeaways
+from edupulse.study_tools import generate_quiz, grade_quiz, sample_context, summarize_takeaways
 from edupulse.text_utils import escape_markdown, highlight_terms
 from edupulse.vector_store import VectorStore, document_id
 
@@ -44,6 +44,11 @@ if "search_results" not in st.session_state:
     st.session_state.search_results = None
 if "search_query" not in st.session_state:
     st.session_state.search_query = ""
+if "quiz" not in st.session_state:
+    st.session_state.quiz = None
+    st.session_state.quiz_answers = []
+    st.session_state.quiz_submitted = False
+    st.session_state.quiz_round = 0  # bumped for every new quiz so radio keys reset
 
 
 @st.cache_resource
@@ -61,6 +66,7 @@ def set_document(info) -> None:
         return
     st.session_state.document = info
     st.session_state.search_results = None
+    st.session_state.quiz = None
 
 
 def result_as_text(result: dict) -> str:
@@ -284,6 +290,74 @@ with quiz_tab:
     else:
         doc = st.session_state.document
         st.write(f"Multiple-choice practice questions from **{doc.filename}**.")
+        with st.form("quiz_settings"):
+            topic_col, count_col = st.columns([3, 1])
+            topic = topic_col.text_input(
+                "Focus on a topic (optional)",
+                key="quiz_topic",
+                placeholder="e.g. cell membrane",
+            )
+            n_questions = count_col.number_input(
+                "Questions", min_value=3, max_value=10, value=5, key="quiz_n"
+            )
+            make_quiz = st.form_submit_button("Generate quiz", type="primary")
+        if make_quiz:
+            try:
+                with st.spinner("Writing your quiz..."):
+                    client = get_client(user_key)
+                    chunks = sample_context(store, OpenAIEmbedder(client), doc.doc_id, topic)
+                    st.session_state.quiz = generate_quiz(client, chunks, n=int(n_questions))
+                st.session_state.quiz_answers = []
+                st.session_state.quiz_submitted = False
+                st.session_state.quiz_round += 1
+            except LLM_ERRORS as exc:
+                st.error(friendly_error(exc))
+
+        quiz = st.session_state.quiz
+        if quiz:
+            submitted = st.session_state.quiz_submitted
+            with st.form("quiz_answers_form"):
+                answers = []
+                for i, q in enumerate(quiz.questions):
+                    answers.append(
+                        st.radio(
+                            f"**{i + 1}. {q.question}**",
+                            options=range(len(q.options)),
+                            format_func=lambda j, q=q: q.options[j],
+                            index=None,
+                            key=f"quiz_{st.session_state.quiz_round}_{i}",
+                            disabled=submitted,
+                        )
+                    )
+                    if submitted:
+                        chosen = st.session_state.quiz_answers[i]
+                        if chosen == q.correct_index:
+                            st.success(f"Correct! {q.explanation}")
+                        else:
+                            st.error(
+                                f"Not quite. The answer is **{q.correct_option}**. {q.explanation}"
+                            )
+                check = st.form_submit_button("Check answers", disabled=submitted)
+
+            if check:
+                if None in answers:
+                    st.warning("Answer every question before checking.")
+                else:
+                    st.session_state.quiz_answers = answers
+                    st.session_state.quiz_submitted = True
+                    st.rerun()
+
+            if submitted:
+                result = grade_quiz(quiz, st.session_state.quiz_answers)
+                score_col, retry_col = st.columns([3, 1])
+                score_col.metric("Your score", f"{result.score} / {result.total}")
+                if result.score == result.total:
+                    st.balloons()
+                if retry_col.button("Try again", key="quiz_retry"):
+                    st.session_state.quiz_answers = []
+                    st.session_state.quiz_submitted = False
+                    st.session_state.quiz_round += 1
+                    st.rerun()
 
 # --- Flashcards ---------------------------------------------------------------
 with cards_tab:

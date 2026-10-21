@@ -11,6 +11,7 @@ from edupulse.study_tools import (
     evenly_spaced,
     format_chunks,
     generate_quiz,
+    grade_quiz,
     sample_context,
     shuffle_options,
     summarize_takeaways,
@@ -144,3 +145,17 @@ def test_sample_context_respects_char_budget(store, keyword_embedder):
 
 def test_sample_context_always_returns_at_least_one_chunk(store, keyword_embedder):
     assert len(sample_context(store, keyword_embedder, "d", max_chars=1)) == 1
+
+
+def test_grade_quiz():
+    quiz = Quiz(questions=[QuizQuestion(**question(correct=i)) for i in (0, 1, 2)])
+    result = grade_quiz(quiz, [0, 3, None])
+    assert result.correct == [True, False, False]
+    assert (result.score, result.total) == (1, 3)
+    assert result.percent == pytest.approx(1 / 3)
+
+
+def test_grade_quiz_needs_one_answer_per_question():
+    quiz = Quiz(questions=[QuizQuestion(**question())])
+    with pytest.raises(ValueError):
+        grade_quiz(quiz, [0, 1])
