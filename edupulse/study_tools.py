@@ -2,10 +2,22 @@
 
 from __future__ import annotations
 
+import random
+
 from openai import OpenAI
 from pydantic import BaseModel
 
-from edupulse.llm import parse_structured
+from edupulse.chunker import Chunk
+from edupulse.embeddings import Embedder
+from edupulse.llm import StructuredOutputError, parse_structured
+from edupulse.vector_store import VectorStore
+
+MAX_CONTEXT_CHUNKS = 8
+MAX_CONTEXT_CHARS = 12_000
+TOPIC_TOP_K = 6
+
+
+# --- key takeaways ---------------------------------------------------------------
 
 
 class KeyTakeaways(BaseModel):
@@ -28,3 +40,134 @@ def summarize_takeaways(client: OpenAI, history: list[dict]) -> KeyTakeaways:
     takeaways = parse_structured(client, messages, KeyTakeaways)
     takeaways.points = [p.strip() for p in takeaways.points if p.strip()]
     return takeaways
+
+
+# --- picking study material from the document --------------------------------------
+
+
+def evenly_spaced(items: list, n: int) -> list:
+    """Pick up to n items spread across the whole list (keeps first and last)."""
+    if n <= 0 or not items:
+        return []
+    if len(items) <= n:
+        return list(items)
+    if n == 1:
+        return [items[len(items) // 2]]
+    step = (len(items) - 1) / (n - 1)
+    return [items[round(i * step)] for i in range(n)]
+
+
+def sample_context(
+    store: VectorStore,
+    embedder: Embedder,
+    doc_id: str,
+    topic: str | None = None,
+    *,
+    max_chunks: int = MAX_CONTEXT_CHUNKS,
+    max_chars: int = MAX_CONTEXT_CHARS,
+) -> list[Chunk]:
+    """Chunks to build questions from.
+
+    With a topic, use the chunks most relevant to it. Without one, take
+    chunks spread across the whole document so questions don't all come
+    from chapter 1.
+    """
+    if topic and topic.strip():
+        results = store.search(doc_id, embedder.embed_query(topic), k=TOPIC_TOP_K)
+        chunks = sorted((r.chunk for r in results), key=lambda c: c.index)
+    else:
+        chunks = evenly_spaced(store.get_chunks(doc_id), max_chunks)
+
+    picked, total = [], 0
+    for chunk in chunks:
+        if picked and total + len(chunk.text) > max_chars:
+            break
+        picked.append(chunk)
+        total += len(chunk.text)
+    return picked
+
+
+def format_chunks(chunks: list[Chunk]) -> str:
+    return "\n\n".join(f"[{c.page_label}]\n{c.text}" for c in chunks)
+
+
+# --- quiz ------------------------------------------------------------------------
+
+
+class QuizQuestion(BaseModel):
+    question: str
+    options: list[str]
+    correct_index: int
+    explanation: str
+
+    @property
+    def correct_option(self) -> str:
+        return self.options[self.correct_index]
+
+
+class Quiz(BaseModel):
+    questions: list[QuizQuestion]
+
+
+QUIZ_PROMPT = (
+    "You write multiple-choice questions that help a student revise. Use ONLY the study "
+    "material provided, never outside facts. Write exactly {n} questions covering different "
+    "parts of the material. Each question has exactly 4 short, plausible options and one "
+    "correct answer (correct_index is 0-3). Avoid 'all of the above' and 'none of the above'. "
+    "The explanation says in one or two sentences why the answer is right, based on the "
+    "material."
+)
+
+
+def _valid_question(q: QuizQuestion) -> bool:
+    options = [o.strip() for o in q.options]
+    return (
+        bool(q.question.strip())
+        and len(options) == 4
+        and all(options)
+        and len({o.lower() for o in options}) == 4
+        and 0 <= q.correct_index < 4
+    )
+
+
+def shuffle_options(question: QuizQuestion, rng: random.Random) -> QuizQuestion:
+    """Shuffle the options (models like putting the answer first) and fix the index."""
+    order = list(range(len(question.options)))
+    rng.shuffle(order)
+    return question.model_copy(
+        update={
+            "options": [question.options[i] for i in order],
+            "correct_index": order.index(question.correct_index),
+        }
+    )
+
+
+def validate_quiz(quiz: Quiz, n: int, rng: random.Random | None = None) -> Quiz:
+    """Drop malformed questions, tidy whitespace, shuffle options, keep at most n."""
+    rng = rng or random.Random()
+    clean = []
+    for q in quiz.questions:
+        q = q.model_copy(
+            update={
+                "question": q.question.strip(),
+                "options": [o.strip() for o in q.options],
+                "explanation": q.explanation.strip(),
+            }
+        )
+        if _valid_question(q):
+            clean.append(shuffle_options(q, rng))
+    if not clean:
+        raise StructuredOutputError("The model didn't return any usable quiz questions.")
+    return Quiz(questions=clean[:n])
+
+
+def generate_quiz(
+    client: OpenAI, chunks: list[Chunk], n: int = 5, rng: random.Random | None = None
+) -> Quiz:
+    if not chunks:
+        raise ValueError("No study material to build a quiz from.")
+    messages = [
+        {"role": "system", "content": QUIZ_PROMPT.format(n=n)},
+        {"role": "user", "content": f"Study material:\n\n{format_chunks(chunks)}"},
+    ]
+    return validate_quiz(parse_structured(client, messages, Quiz), n, rng)
