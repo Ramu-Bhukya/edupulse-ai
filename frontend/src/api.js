@@ -35,6 +35,12 @@ export const listDocuments = () => request('/api/documents')
 
 export const deleteDocument = (docId) => request(`/api/documents/${docId}`, { method: 'DELETE' })
 
+export const generateQuiz = (docId, { topic, n }, apiKey) =>
+  request(`/api/documents/${docId}/quiz`, { method: 'POST', apiKey, body: { topic, n } })
+
+export const generateFlashcards = (docId, { topic, n }, apiKey) =>
+  request(`/api/documents/${docId}/flashcards`, { method: 'POST', apiKey, body: { topic, n } })
+
 export async function uploadDocument(file, apiKey) {
   const form = new FormData()
   form.append('file', file)

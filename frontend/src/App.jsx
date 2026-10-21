@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { getPresets, listDocuments } from './api.js'
 import ChatTab from './components/ChatTab.jsx'
 import DocumentPanel from './components/DocumentPanel.jsx'
+import FlashcardsTab from './components/FlashcardsTab.jsx'
+import QuizTab from './components/QuizTab.jsx'
 
 const TABS = [
   { id: 'chat', label: '💬 Chat with Notes' },
@@ -123,7 +125,9 @@ export default function App() {
           ))}
         </nav>
 
-        {tab === 'chat' && (
+        {/* Tabs stay mounted (just hidden) so a half-finished quiz survives a
+            look at the chat. Keying by document resets them when it changes. */}
+        <section className="tab-panel" hidden={tab !== 'chat'}>
           <ChatTab
             messages={messages}
             setMessages={setMessages}
@@ -132,9 +136,13 @@ export default function App() {
             tone={tone}
             apiKey={apiKey}
           />
-        )}
-        {tab === 'quiz' && <p className="empty">The quiz generator is coming to this view next.</p>}
-        {tab === 'cards' && <p className="empty">Flashcards are coming to this view next.</p>}
+        </section>
+        <section className="tab-panel" hidden={tab !== 'quiz'}>
+          <QuizTab key={activeDoc?.doc_id ?? 'none'} activeDoc={activeDoc} apiKey={apiKey} />
+        </section>
+        <section className="tab-panel" hidden={tab !== 'cards'}>
+          <FlashcardsTab key={activeDoc?.doc_id ?? 'none'} activeDoc={activeDoc} apiKey={apiKey} />
+        </section>
       </main>
     </div>
   )
