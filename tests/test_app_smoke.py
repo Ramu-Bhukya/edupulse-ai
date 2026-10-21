@@ -292,12 +292,27 @@ def test_chat_uses_document_context_when_loaded(fake_rag, fake_llm):
     at.chat_input[0].set_value("What does the Golgi apparatus do?").run()
     assert not at.exception
     system = fake_llm.chat.completions.calls[-1]["messages"][0]["content"]
-    assert "Context:" in system
+    assert "<context>" in system
+    assert "ONLY the context" in system
     assert "Golgi apparatus" in system
+
+    answer = at.session_state.messages[-1]
+    assert answer["document"] == "cells.pdf"
+    assert answer["sources"] and "page_label" in answer["sources"][0]
+    assert any(e.label.startswith("Sources (") for e in at.expander)
 
 
 def test_chat_without_document_has_no_context(fake_llm):
     at = run_app()
     at.chat_input[0].set_value("What is a cell?").run()
     system = fake_llm.chat.completions.calls[-1]["messages"][0]["content"]
-    assert "Context:" not in system
+    assert "<context>" not in system
+    assert "sources" not in at.session_state.messages[-1]
+
+
+def test_idk_answer_shows_hint_instead_of_sources(fake_rag, fake_llm):
+    fake_llm.chat.completions.reply = "I don't know."
+    at = upload_sample(run_app())
+    at.chat_input[0].set_value("Who won the 1998 World Cup?").run()
+    assert any("doesn't seem to be covered" in c.value for c in at.caption)
+    assert not [e for e in at.expander if e.label.startswith("Sources")]

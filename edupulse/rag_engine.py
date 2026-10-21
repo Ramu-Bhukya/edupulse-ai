@@ -12,7 +12,7 @@ from openai import OpenAI
 
 from edupulse.embeddings import Embedder
 from edupulse.llm import stream_chat
-from edupulse.prompts import build_chat_messages
+from edupulse.prompts import IDK_ANSWER, RAG_RULES, build_chat_messages
 from edupulse.vector_store import SearchResult, VectorStore
 
 DEFAULT_TOP_K = 4
@@ -51,11 +51,17 @@ def format_context(results: list[SearchResult]) -> str:
 
 
 def build_rag_system_prompt(base_prompt: str, context: str) -> str:
-    return (
-        f"{base_prompt}\n\n"
-        "Use the following excerpts from the student's document to answer.\n\n"
-        f"Context:\n{context}"
-    )
+    """Persona prompt + grounding rules + the retrieved excerpts.
+
+    The excerpts sit inside <context> tags so the model can tell the
+    document apart from our instructions.
+    """
+    return f"{base_prompt}\n\n{RAG_RULES}\n\n<context>\n{context}\n</context>"
+
+
+def is_idk(answer: str) -> bool:
+    """True if the model said it couldn't find the answer in the document."""
+    return answer.strip().lower().startswith(IDK_ANSWER.lower().rstrip("."))
 
 
 def answer_stream(
@@ -74,6 +80,9 @@ def answer_stream(
     Returns the retrieved chunks (to show as sources) and a token stream.
     """
     results = retrieve(store, embedder, doc_id, retrieval_query(history), k=k)
+    if not results:
+        # nothing to ground the answer in, so don't even ask the model
+        return [], iter([IDK_ANSWER])
     system_prompt = build_rag_system_prompt(base_prompt, format_context(results))
     messages = build_chat_messages(system_prompt, history, max_messages=max_messages)
     return results, stream_chat(client, messages)

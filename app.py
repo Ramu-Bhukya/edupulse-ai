@@ -16,9 +16,9 @@ from edupulse.prompts import (
     build_system_prompt,
     build_user_prompt,
 )
-from edupulse.rag_engine import answer_stream
+from edupulse.rag_engine import answer_stream, is_idk
 from edupulse.study_tools import summarize_takeaways
-from edupulse.text_utils import highlight_terms
+from edupulse.text_utils import escape_markdown, highlight_terms
 from edupulse.vector_store import VectorStore, document_id
 
 MAX_MATERIAL_CHARS = 8000
@@ -203,8 +203,27 @@ with mentor_tab:
     for message in st.session_state.messages:
         with st.chat_message(message["role"], avatar=AVATARS[message["role"]]):
             if message["role"] == "assistant":
-                st.caption(message.get("persona", ""))
+                label = message.get("persona", "")
+                if message.get("document"):
+                    label += f" · from {message['document']}"
+                st.caption(label)
             st.markdown(message["content"])
+            if message.get("document") and is_idk(message["content"]):
+                st.caption(
+                    "That doesn't seem to be covered in your document. Try rephrasing, "
+                    "or search for related terms in the Knowledge Base tab."
+                )
+            elif message.get("sources"):
+                with st.expander(f"Sources ({len(message['sources'])})"):
+                    for i, source in enumerate(message["sources"], start=1):
+                        st.markdown(
+                            f"**[{i}]** {source['page_label']} · "
+                            f"{source['similarity']:.0%} match"
+                        )
+                        snippet = source["text"].replace("\n", " ")
+                        if len(snippet) > 300:
+                            snippet = snippet[:300] + "..."
+                        st.caption(escape_markdown(snippet))
 
     question = st.chat_input(f"Ask the {persona.name.lower()} anything...")
     if question:
@@ -217,8 +236,9 @@ with mentor_tab:
             try:
                 client = get_client(user_key)
                 system_prompt = build_system_prompt(persona, tone)
+                sources = []
                 if active_doc:
-                    _, stream = answer_stream(
+                    sources, stream = answer_stream(
                         client,
                         store,
                         OpenAIEmbedder(client),
@@ -241,9 +261,18 @@ with mentor_tab:
                 st.session_state.messages.pop()  # don't keep a question with no answer
                 st.error(friendly_error(exc))
             else:
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": reply, "persona": persona.name}
-                )
+                message = {"role": "assistant", "content": reply, "persona": persona.name}
+                if active_doc:
+                    message["document"] = active_doc.filename
+                    message["sources"] = [
+                        {
+                            "page_label": r.chunk.page_label,
+                            "text": r.chunk.text,
+                            "similarity": round(r.similarity, 3),
+                        }
+                        for r in sources
+                    ]
+                st.session_state.messages.append(message)
                 st.rerun()  # refresh the sidebar counter and export buttons
 
 # --- Knowledge Base ---------------------------------------------------------
