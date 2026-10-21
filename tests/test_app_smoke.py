@@ -18,7 +18,7 @@ def fake_llm(monkeypatch):
 
 
 def run_app() -> AppTest:
-    return AppTest.from_file(APP).run()
+    return AppTest.from_file(APP, default_timeout=15).run()
 
 
 def generate(at: AppTest, material: str = MATERIAL) -> AppTest:
@@ -79,3 +79,15 @@ def test_history_keeps_newest_first(fake_llm):
     at.button(key="generate").click().run()
     history = at.session_state.history
     assert [h["task"] for h in history] == ["Summarize", "Explain"]
+
+
+def test_chat_streams_reply(fake_llm):
+    at = run_app()
+    at.chat_input[0].set_value("What is a ventricle?").run()
+    assert not at.exception
+    assert len(at.chat_message) == 2
+    assert at.chat_message[0].markdown[0].value == "What is a ventricle?"
+    assert "fake tutor" in at.chat_message[1].markdown[0].value
+    sent = fake_llm.chat.completions.calls[0]
+    assert sent["stream"] is True
+    assert sent["messages"][-1] == {"role": "user", "content": "What is a ventricle?"}

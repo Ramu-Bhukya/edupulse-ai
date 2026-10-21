@@ -2,7 +2,7 @@ import pytest
 from openai import OpenAI
 
 from edupulse.config import MissingAPIKeyError
-from edupulse.llm import complete, get_client
+from edupulse.llm import complete, get_client, stream_chat
 
 
 def test_complete_returns_reply_text(fake_client):
@@ -28,3 +28,10 @@ def test_get_client_without_key(monkeypatch):
 
 def test_get_client_with_key():
     assert isinstance(get_client("sk-test"), OpenAI)
+
+
+def test_stream_chat_yields_tokens(fake_client):
+    tokens = list(stream_chat(fake_client, [{"role": "user", "content": "hi"}]))
+    assert tokens == ["fake ", "reply"]
+    assert "".join(tokens) == "fake reply"
+    assert fake_client.chat.completions.calls[0]["stream"] is True
