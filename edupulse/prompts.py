@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from edupulse.presets import Persona, Tone
 
+FORMAT_RULES = (
+    "Format every answer in Markdown: short paragraphs, bullet points for lists "
+    "and **bold** for key terms. Use $...$ for math. If the material is unclear "
+    "or incomplete, say so instead of guessing."
+)
+
 TASKS = {
     "Explain": "Explain the following material so a student can understand it.",
     "Summarize": "Summarize the key points of the following material.",

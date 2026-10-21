@@ -1,9 +1,20 @@
 from pathlib import Path
 
+import pytest
 from streamlit.testing.v1 import AppTest
+
+from edupulse import llm
+from tests.conftest import FakeOpenAI
 
 APP = str(Path(__file__).resolve().parent.parent / "app.py")
 MATERIAL = "The heart has four chambers: two atria and two ventricles."
+
+
+@pytest.fixture
+def fake_llm(monkeypatch):
+    client = FakeOpenAI("**Answer** from the fake tutor")
+    monkeypatch.setattr(llm, "get_client", lambda api_key=None: client)
+    return client
 
 
 def run_app() -> AppTest:
@@ -27,30 +38,42 @@ def test_sidebar_lists_presets():
     assert "Socratic" in at.sidebar.selectbox[1].options
 
 
-def test_generate_requires_material():
+def test_generate_requires_material(fake_llm):
     at = run_app()
     at.button(key="generate").click().run()
     assert at.warning
     assert at.session_state.generated is None
+    assert fake_llm.chat.completions.calls == []
 
 
-def test_generate_rejects_very_short_material():
+def test_generate_rejects_very_short_material(fake_llm):
     at = generate(run_app(), "hi")
     assert at.warning
     assert at.session_state.history == []
 
 
-def test_generate_builds_prompt():
+def test_missing_key_shows_error(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    at = generate(run_app())
+    assert not at.exception
+    assert "API key" in at.error[0].value
+
+
+def test_generate_calls_llm_with_persona(fake_llm):
     at = run_app()
     at.sidebar.selectbox[0].select("Medical Tutor").run()
     at = generate(at)
     result = at.session_state.generated
     assert result["persona"] == "Medical Tutor"
-    assert MATERIAL in result["user"]
-    assert len(at.code) == 2
+    assert result["response"] == "**Answer** from the fake tutor"
+
+    sent = fake_llm.chat.completions.calls[0]["messages"]
+    assert [m["role"] for m in sent] == ["system", "user"]
+    assert "medical tutor" in sent[0]["content"].lower()
+    assert MATERIAL in sent[1]["content"]
 
 
-def test_history_keeps_newest_first():
+def test_history_keeps_newest_first(fake_llm):
     at = generate(run_app())
     at.main.selectbox[0].select("Summarize").run()
     at.button(key="generate").click().run()
