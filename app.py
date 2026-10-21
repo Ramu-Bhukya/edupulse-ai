@@ -157,10 +157,12 @@ with st.sidebar:
 
 st.title("EduPulse AI")
 
-mentor_tab, kb_tab, architect_tab = st.tabs(["AI Mentor", "Knowledge Base", "Prompt Architect"])
+chat_tab, quiz_tab, cards_tab, search_tab, architect_tab = st.tabs(
+    ["💬 Chat with Notes", "📝 Quiz Generator", "🃏 Flashcards", "🔎 Search", "🛠️ Prompt Architect"]
+)
 
-# --- AI Mentor --------------------------------------------------------------
-with mentor_tab:
+# --- Chat with Notes ----------------------------------------------------------
+with chat_tab:
     active_doc = st.session_state.document
     caption_col, takeaways_col, clear_col = st.columns([3, 1, 1])
     if active_doc:
@@ -275,8 +277,24 @@ with mentor_tab:
                 st.session_state.messages.append(message)
                 st.rerun()  # refresh the sidebar counter and export buttons
 
-# --- Knowledge Base ---------------------------------------------------------
-with kb_tab:
+# --- Quiz Generator -----------------------------------------------------------
+with quiz_tab:
+    if st.session_state.document is None:
+        st.info("Upload a PDF in the sidebar and EduPulse will quiz you on it.")
+    else:
+        doc = st.session_state.document
+        st.write(f"Multiple-choice practice questions from **{doc.filename}**.")
+
+# --- Flashcards ---------------------------------------------------------------
+with cards_tab:
+    if st.session_state.document is None:
+        st.info("Upload a PDF in the sidebar to turn it into flashcards.")
+    else:
+        doc = st.session_state.document
+        st.write(f"Key terms and definitions from **{doc.filename}**.")
+
+# --- Search -------------------------------------------------------------------
+with search_tab:
     doc = st.session_state.document
     if doc is None:
         st.info("Upload a PDF in the sidebar to search it by meaning, not just keywords.")
@@ -317,7 +335,7 @@ with kb_tab:
                 score_col.progress(score, text=f"{score:.0%} match")
                 st.markdown(highlight_terms(result.chunk.text, st.session_state.search_query))
 
-# --- Prompt Architect -------------------------------------------------------
+# --- Prompt Architect ---------------------------------------------------------
 with architect_tab:
     st.write(
         "Paste some study material, pick a persona and a tone, and let the AI "

@@ -316,3 +316,10 @@ def test_idk_answer_shows_hint_instead_of_sources(fake_rag, fake_llm):
     at.chat_input[0].set_value("Who won the 1998 World Cup?").run()
     assert any("doesn't seem to be covered" in c.value for c in at.caption)
     assert not [e for e in at.expander if e.label.startswith("Sources")]
+
+
+def test_main_tabs():
+    at = run_app()
+    labels = [tab.label for tab in at.tabs]
+    assert labels[:3] == ["💬 Chat with Notes", "📝 Quiz Generator", "🃏 Flashcards"]
+    assert any("quiz you on it" in info.value for info in at.info)
