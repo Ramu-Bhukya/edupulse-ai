@@ -23,3 +23,12 @@ def export_markdown(messages: list[dict], *, persona: str, tone: str) -> str:
         speaker = "You" if m["role"] == "user" else m.get("persona", persona)
         lines += [f"**{speaker}:**", "", m["content"], ""]
     return "\n".join(lines)
+
+
+def prompt_result_as_text(result: dict) -> str:
+    """Prompt Architect result (system prompt, user prompt, answer) as plain text."""
+    return (
+        f"# System\n{result['system']}\n\n"
+        f"# User\n{result['user']}\n\n"
+        f"# Response\n{result['response']}\n"
+    )

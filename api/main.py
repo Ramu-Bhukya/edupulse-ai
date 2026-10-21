@@ -27,7 +27,7 @@ from edupulse.llm import LLM_ERRORS, friendly_error, get_client, stream_chat
 from edupulse.pdf_parser import PDFParseError
 from edupulse.presets import find_by_name, load_presets
 from edupulse.prompts import build_chat_messages, build_system_prompt
-from edupulse.rag_engine import answer_stream
+from edupulse.rag_engine import answer_stream, source_to_dict
 from edupulse.study_tools import (
     FlashcardDeck,
     Quiz,
@@ -121,15 +121,6 @@ class UploadResponse(BaseModel):
     cached: bool
 
 
-def source_dict(result) -> dict:
-    return {
-        "index": result.chunk.index,
-        "page_label": result.chunk.page_label,
-        "text": result.chunk.text,
-        "similarity": round(result.similarity, 3),
-    }
-
-
 # --- routes ----------------------------------------------------------------------
 
 
@@ -182,7 +173,7 @@ def search(doc_id: str, body: SearchRequest, store: Store, ai: AI) -> list[dict]
         results = store.search(doc_id, embedder.embed_query(body.query), k=body.k)
     except LLM_ERRORS as exc:
         raise llm_error(exc) from exc
-    return [source_dict(r) for r in results]
+    return [source_to_dict(r) for r in results]
 
 
 @app.post("/api/chat")
@@ -214,7 +205,8 @@ def chat(body: ChatRequest, store: Store, ai: AI) -> StreamingResponse:
         raise llm_error(exc) from exc
 
     def events() -> Iterator[str]:
-        yield json.dumps({"type": "sources", "sources": [source_dict(r) for r in results]}) + "\n"
+        sources = [source_to_dict(r) for r in results]
+        yield json.dumps({"type": "sources", "sources": sources}) + "\n"
         try:
             for token in tokens:
                 yield json.dumps({"type": "token", "text": token}) + "\n"

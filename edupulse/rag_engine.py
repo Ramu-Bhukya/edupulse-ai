@@ -86,3 +86,13 @@ def answer_stream(
     system_prompt = build_rag_system_prompt(base_prompt, format_context(results))
     messages = build_chat_messages(system_prompt, history, max_messages=max_messages)
     return results, stream_chat(client, messages)
+
+
+def source_to_dict(result: SearchResult) -> dict:
+    """JSON-friendly version of a retrieved chunk, for the UI and the API."""
+    return {
+        "index": result.chunk.index,
+        "page_label": result.chunk.page_label,
+        "text": result.chunk.text,
+        "similarity": round(result.similarity, 3),
+    }
