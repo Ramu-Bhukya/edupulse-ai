@@ -17,6 +17,7 @@ from edupulse.prompts import (
     build_user_prompt,
 )
 from edupulse.study_tools import summarize_takeaways
+from edupulse.text_utils import highlight_terms
 from edupulse.vector_store import VectorStore, document_id
 
 MAX_MATERIAL_CHARS = 8000
@@ -40,6 +41,8 @@ if "document" not in st.session_state:
     st.session_state.document = None
 if "search_results" not in st.session_state:
     st.session_state.search_results = None
+if "search_query" not in st.session_state:
+    st.session_state.search_query = ""
 
 
 @st.cache_resource
@@ -48,6 +51,15 @@ def get_store(path: str) -> VectorStore:
 
 
 store = get_store(get_settings().chroma_dir)
+
+
+def set_document(info) -> None:
+    """Switch the active document and forget results that belonged to the old one."""
+    current = st.session_state.document
+    if current is not None and info is not None and current.doc_id == info.doc_id:
+        return
+    st.session_state.document = info
+    st.session_state.search_results = None
 
 
 def result_as_text(result: dict) -> str:
@@ -86,22 +98,39 @@ with st.sidebar:
     st.divider()
     st.subheader("Your document")
     uploaded = st.file_uploader("Upload a PDF textbook or syllabus", type=["pdf"])
-    if uploaded is None:
-        st.session_state.document = None
-    else:
+    if uploaded is not None:
         data = uploaded.getvalue()
         current = st.session_state.document
         if current is None or current.doc_id != document_id(data):
             try:
                 with st.spinner("Processing document..."):
                     embedder = OpenAIEmbedder(get_client(user_key))
-                    info, _ = index_pdf(data, uploaded.name, store, embedder)
-                st.session_state.document = info
-                st.session_state.search_results = None
+                    info, cached = index_pdf(data, uploaded.name, store, embedder)
+                set_document(info)
+                if cached:
+                    st.toast(f"{info.filename} was indexed before, loaded it instantly.")
             except PDFParseError as exc:
                 st.error(str(exc))
             except LLM_ERRORS as exc:
                 st.error(friendly_error(exc))
+    else:
+        # Documents indexed in earlier sessions are still in Chroma, so they
+        # can be reopened without uploading (or paying for embeddings) again.
+        library = {d.doc_id: d for d in store.list_documents()}
+        choice = None
+        if library:
+            choice = st.selectbox(
+                "...or open one you indexed before",
+                [None, *library],
+                format_func=lambda i: "Choose a document" if i is None else library[i].filename,
+                key="library_choice",
+            )
+        set_document(library.get(choice))
+        if st.session_state.document and st.button("Remove from library", key="remove_doc"):
+            store.delete_document(st.session_state.document.doc_id)
+            set_document(None)
+            st.rerun()
+
     if st.session_state.document:
         doc = st.session_state.document
         st.success(f"**{doc.filename}**  \n{doc.page_count} pages · {doc.chunk_count} chunks")
@@ -219,13 +248,22 @@ with kb_tab:
                         st.session_state.search_results = store.search(
                             doc.doc_id, embedder.embed_query(query), k=k
                         )
+                        st.session_state.search_query = query
                 except LLM_ERRORS as exc:
                     st.error(friendly_error(exc))
 
-        for rank, result in enumerate(st.session_state.search_results or [], start=1):
+        results = st.session_state.search_results
+        if results is not None and not results:
+            st.info("No matches found.")
+        for rank, result in enumerate(results or [], start=1):
             with st.container(border=True):
-                st.markdown(f"**#{rank}** · {result.chunk.page_label}")
-                st.write(result.chunk.text)
+                title_col, score_col = st.columns([3, 2])
+                title_col.markdown(
+                    f"**#{rank}** · {result.chunk.page_label} · chunk {result.chunk.index + 1}"
+                )
+                score = max(0.0, min(1.0, result.similarity))
+                score_col.progress(score, text=f"{score:.0%} match")
+                st.markdown(highlight_terms(result.chunk.text, st.session_state.search_query))
 
 # --- Prompt Architect -------------------------------------------------------
 with architect_tab:

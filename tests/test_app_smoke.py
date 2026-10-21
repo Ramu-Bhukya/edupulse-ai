@@ -249,3 +249,39 @@ def test_invalid_pdf_shows_error(fake_rag):
     assert not at.exception
     assert "valid PDF" in at.sidebar.error[0].value
     assert at.session_state.document is None
+
+
+def test_reupload_of_known_file_uses_existing_index(fake_rag):
+    first = upload_sample(run_app())
+    assert fake_rag.calls == 1
+    # a brand new session (same Chroma dir) uploads the same file again
+    second = upload_sample(run_app())
+    assert fake_rag.calls == 1
+    assert second.session_state.document == first.session_state.document
+    assert "indexed before" in second.toast[0].value
+
+
+def test_reopen_document_from_library(fake_rag):
+    upload_sample(run_app())
+    at = run_app()  # new session, nothing uploaded
+    picker = at.sidebar.selectbox(key="library_choice")
+    picker.select(picker.options[1]).run()
+    assert at.session_state.document.filename == "cells.pdf"
+
+
+def test_remove_document_from_library(fake_rag):
+    doc_id = upload_sample(run_app()).session_state.document.doc_id
+    at = run_app()
+    at.sidebar.selectbox(key="library_choice").set_value(doc_id).run()
+    at.button(key="remove_doc").click().run()
+    assert at.session_state.document is None
+    # the library is empty now, so the picker is gone
+    assert not [box for box in at.sidebar.selectbox if box.key == "library_choice"]
+
+
+def test_search_results_show_score_and_highlights(fake_rag):
+    at = upload_sample(run_app())
+    at.text_input(key="kb_query").input("Golgi apparatus")
+    at.button(key="FormSubmitter:kb_search-Search").click().run()
+    assert at.get("progress")
+    assert any("**Golgi**" in md.value for md in at.markdown)
