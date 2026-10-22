@@ -34,7 +34,7 @@ from edupulse.ui_components import (
     render_chat_message,
     render_document_badge,
     render_flashcard,
-    render_quiz_feedback,
+    render_graded_question,
     render_search_result,
 )
 from edupulse.vector_store import DocumentInfo, VectorStore, document_id
@@ -331,34 +331,11 @@ def quiz_tab(store: VectorStore) -> None:
     if not quiz:
         return
 
-    submitted = st.session_state.quiz_submitted
-    with st.form("quiz_answers_form"):
-        answers = []
+    if st.session_state.quiz_submitted:
+        answers = st.session_state.quiz_answers
         for i, q in enumerate(quiz.questions):
-            answers.append(
-                st.radio(
-                    f"**{i + 1}. {q.question}**",
-                    options=range(len(q.options)),
-                    format_func=lambda j, q=q: q.options[j],
-                    index=None,
-                    key=f"quiz_{st.session_state.quiz_round}_{i}",
-                    disabled=submitted,
-                )
-            )
-            if submitted:
-                render_quiz_feedback(q, st.session_state.quiz_answers[i])
-        check = st.form_submit_button("Check answers", disabled=submitted)
-
-    if check:
-        if None in answers:
-            st.warning("Answer every question before checking.")
-        else:
-            st.session_state.quiz_answers = answers
-            st.session_state.quiz_submitted = True
-            st.rerun()
-
-    if submitted:
-        result = grade_quiz(quiz, st.session_state.quiz_answers)
+            render_graded_question(i + 1, q, answers[i])
+        result = grade_quiz(quiz, answers)
         score_col, retry_col = st.columns([3, 1])
         score_col.metric("Your score", f"{result.score} / {result.total}")
         if result.score == result.total:
@@ -367,6 +344,28 @@ def quiz_tab(store: VectorStore) -> None:
             st.session_state.quiz_answers = []
             st.session_state.quiz_submitted = False
             st.session_state.quiz_round += 1
+            st.rerun()
+        return
+
+    with st.form("quiz_answers_form"):
+        answers = [
+            st.radio(
+                f"**{i + 1}. {q.question}**",
+                options=range(len(q.options)),
+                format_func=lambda j, q=q: q.options[j],
+                index=None,
+                key=f"quiz_{st.session_state.quiz_round}_{i}",
+            )
+            for i, q in enumerate(quiz.questions)
+        ]
+        check = st.form_submit_button("Check answers")
+
+    if check:
+        if None in answers:
+            st.warning("Answer every question before checking.")
+        else:
+            st.session_state.quiz_answers = answers
+            st.session_state.quiz_submitted = True
             st.rerun()
 
 

@@ -391,6 +391,12 @@ def test_quiz_grading(fake_rag, fake_llm):
     assert len(at.main.success) == 3
     assert sum("Not quite" in e.value for e in at.main.error) == 2
 
+    # the review must still show what the student picked for every question
+    assert len(at.radio) == 0
+    picked = [md.value for md in at.main.markdown if "(your answer)" in md.value]
+    assert len(picked) == 5
+    assert sum("❌" in md for md in picked) == 2
+
 
 def test_quiz_retry_resets_answers(fake_rag, fake_llm):
     at = answer_quiz(make_quiz(fake_llm), lambda q: q.correct_index)

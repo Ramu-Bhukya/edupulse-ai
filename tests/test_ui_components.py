@@ -3,8 +3,22 @@ from streamlit.testing.v1 import AppTest
 from edupulse.chunker import Chunk
 from edupulse.history import prompt_result_as_text
 from edupulse.rag_engine import source_to_dict
-from edupulse.ui_components import DEFAULT_STATE, snippet
+from edupulse.study_tools import QuizQuestion
+from edupulse.ui_components import DEFAULT_STATE, graded_options, snippet
 from edupulse.vector_store import SearchResult
+
+
+def test_graded_options_mark_answer_and_pick():
+    q = QuizQuestion(
+        question="Q?", options=["A", "B", "C", "D"], correct_index=1, explanation="e"
+    )
+    assert graded_options(q, chosen=2) == [
+        "⚪ A",
+        "✅ **B**",
+        "❌ C (your answer)",
+        "⚪ D",
+    ]
+    assert graded_options(q, chosen=1)[1] == "✅ **B** (your answer)"
 
 
 def test_snippet_flattens_and_truncates():

@@ -133,6 +133,31 @@ def render_quiz_feedback(question: QuizQuestion, chosen: int | None) -> None:
         st.error(f"Not quite. The answer is **{question.correct_option}**. {question.explanation}")
 
 
+def graded_options(question: QuizQuestion, chosen: int | None) -> list[str]:
+    """One Markdown line per option, marking the right answer and the student's pick."""
+    lines = []
+    for i, option in enumerate(question.options):
+        text = escape_markdown(option)
+        if i == question.correct_index:
+            line = f"✅ **{text}**"
+        elif i == chosen:
+            line = f"❌ {text}"
+        else:
+            line = f"⚪ {text}"
+        if i == chosen:
+            line += " (your answer)"
+        lines.append(line)
+    return lines
+
+
+def render_graded_question(number: int, question: QuizQuestion, chosen: int | None) -> None:
+    # Read-only review: disabled radios lost the selection after the rerun,
+    # so students couldn't see what they had picked.
+    st.markdown(f"**{number}. {escape_markdown(question.question)}**")
+    st.markdown("  \n".join(graded_options(question, chosen)))
+    render_quiz_feedback(question, chosen)
+
+
 def render_flashcard(card: Flashcard, flipped: bool) -> None:
     st.markdown(CARD_CSS, unsafe_allow_html=True)
     side, text = ("Definition", card.definition) if flipped else ("Term", card.term)
