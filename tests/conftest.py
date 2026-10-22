@@ -8,6 +8,13 @@ from types import SimpleNamespace
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def no_real_api_key(monkeypatch):
+    # edupulse.config loads .env on import; a developer's real key must never
+    # reach the tests, which only ever talk to fakes.
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+
 class FakeCompletions:
     def __init__(self, reply: str):
         self.reply = reply

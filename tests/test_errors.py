@@ -22,6 +22,10 @@ def status_error(cls, status, body=None):
             status_error(openai.RateLimitError, 429, {"code": "insufficient_quota"}),
             "run out of credit",
         ),
+        (
+            status_error(openai.RateLimitError, 429, {"code": "billing_not_active"}),
+            "no active billing",
+        ),
         (status_error(openai.NotFoundError, 404), "was not found"),
         (status_error(openai.BadRequestError, 400), "couldn't process"),
         (status_error(openai.InternalServerError, 500), "(500)"),

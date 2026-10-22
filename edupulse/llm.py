@@ -94,14 +94,20 @@ def parse_structured(
 # Everything the UI should catch and show as a message instead of a traceback.
 LLM_ERRORS = (MissingAPIKeyError, StructuredOutputError, openai.OpenAIError)
 
+BILLING_ERROR_CODES = {"insufficient_quota", "billing_not_active"}
+
 
 def friendly_error(exc: Exception) -> str:
     """Turn SDK exceptions into a message a student can act on."""
     if isinstance(exc, openai.AuthenticationError):
         return "OpenAI rejected the API key. Check that it is correct and still active."
     if isinstance(exc, openai.RateLimitError):
-        if getattr(exc, "code", None) == "insufficient_quota":
-            return "This API key has run out of credit. Check your OpenAI billing settings."
+        # OpenAI uses 429 for billing problems too, which retrying won't fix
+        if getattr(exc, "code", None) in BILLING_ERROR_CODES:
+            return (
+                "This API key's OpenAI account has no active billing or has run out of "
+                "credit. Check the billing settings at platform.openai.com."
+            )
         return "Too many requests right now. Wait a few seconds and try again."
     if isinstance(exc, openai.NotFoundError):
         return (
