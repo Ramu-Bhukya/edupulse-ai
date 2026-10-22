@@ -5,6 +5,10 @@ from __future__ import annotations
 import re
 
 _MD_SPECIAL = re.compile(r"([\\`*_{}\[\]<>#+|$~])")
+# Only special at the start of a line: "6. Cellular Respiration" would become
+# an ordered list, "- note" a bullet and "---"/"===" a heading underline.
+_ORDERED_ITEM = re.compile(r"^(\s*\d+)([.)])", re.M)
+_LINE_START_MARK = re.compile(r"^(\s*)([-=])", re.M)
 
 STOPWORDS = {
     "about", "after", "also", "been", "does", "from", "have", "into", "more", "most",
@@ -15,7 +19,9 @@ STOPWORDS = {
 
 def escape_markdown(text: str) -> str:
     """Escape characters that st.markdown would treat as formatting (or LaTeX)."""
-    return _MD_SPECIAL.sub(r"\\\1", text)
+    text = _MD_SPECIAL.sub(r"\\\1", text)
+    text = _ORDERED_ITEM.sub(r"\1\\\2", text)
+    return _LINE_START_MARK.sub(r"\1\\\2", text)
 
 
 def query_terms(query: str, min_length: int = 4) -> list[str]:

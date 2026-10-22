@@ -6,6 +6,13 @@ def test_escape_markdown():
     assert escape_markdown("snake_case #1") == r"snake\_case \#1"
 
 
+def test_escape_markdown_list_and_heading_markers_at_line_start():
+    text = "6. Cellular Respiration\n- a note\n2) second\n---\nwell-known in 1855. Fine"
+    assert escape_markdown(text) == (
+        "6\\. Cellular Respiration\n\\- a note\n2\\) second\n\\---\nwell-known in 1855. Fine"
+    )
+
+
 def test_query_terms_skip_short_words_and_stopwords():
     assert query_terms("What does the Golgi apparatus do?") == ["apparatus", "golgi"]
     assert query_terms("is it?") == []
