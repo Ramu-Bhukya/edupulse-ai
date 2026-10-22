@@ -38,6 +38,12 @@
   box-sizing: border-box;
 }
 
+/* `input { display: block }` below would otherwise beat the browser's
+   own [hidden] rule and show the hidden file input. */
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
 }
@@ -336,10 +342,6 @@ button.icon {
   min-height: 0;
 }
 
-.tab-panel[hidden] {
-  display: none;
-}
-
 .tool {
   flex: 1;
   min-height: 0;
@@ -401,6 +403,16 @@ button.icon {
 .option.answer {
   color: var(--ok);
   font-weight: 600;
+}
+
+.option.picked:not(.answer) {
+  color: var(--error);
+}
+
+.your-answer {
+  font-size: 0.85rem;
+  font-weight: 400;
+  font-style: italic;
 }
 
 .explanation {

@@ -33,6 +33,7 @@ export default function DocumentPanel({ documents, activeDoc, apiKey, onSelect, 
   async function handleDelete(doc) {
     if (!window.confirm(`Remove ${doc.filename} from the library?`)) return
     setError('')
+    setNotice('')
     try {
       await deleteDocument(doc.doc_id)
       if (activeDoc?.doc_id === doc.doc_id) onSelect(null)
@@ -65,7 +66,13 @@ export default function DocumentPanel({ documents, activeDoc, apiKey, onSelect, 
           <ul className="doc-list">
             {documents.map((doc) => (
               <li key={doc.doc_id} className={doc.doc_id === activeDoc?.doc_id ? 'active' : ''}>
-                <button className="doc" onClick={() => onSelect(doc)}>
+                <button
+                  className="doc"
+                  onClick={() => {
+                    setNotice('')
+                    onSelect(doc)
+                  }}
+                >
                   <strong>{doc.filename}</strong>
                   <span className="muted small">
                     {doc.page_count} pages · {doc.chunk_count} chunks

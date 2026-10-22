@@ -82,21 +82,26 @@ export default function QuizTab({ activeDoc, apiKey }) {
                 <legend>
                   {qi + 1}. {q.question}
                 </legend>
-                {q.options.map((option, oi) => (
-                  <label
-                    key={oi}
-                    className={submitted && oi === q.correct_index ? 'option answer' : 'option'}
-                  >
-                    <input
-                      type="radio"
-                      name={`q${qi}`}
-                      checked={answers[qi] === oi}
-                      disabled={submitted}
-                      onChange={() => choose(qi, oi)}
-                    />
-                    {option}
-                  </label>
-                ))}
+                {q.options.map((option, oi) => {
+                  const classes = ['option']
+                  if (submitted && oi === q.correct_index) classes.push('answer')
+                  if (submitted && oi === answers[qi]) classes.push('picked')
+                  return (
+                    <label key={oi} className={classes.join(' ')}>
+                      <input
+                        type="radio"
+                        name={`q${qi}`}
+                        checked={answers[qi] === oi}
+                        disabled={submitted}
+                        onChange={() => choose(qi, oi)}
+                      />
+                      {option}
+                      {submitted && oi === answers[qi] && (
+                        <span className="your-answer"> (your answer)</span>
+                      )}
+                    </label>
+                  )
+                })}
                 {submitted && (
                   <p className="explanation">
                     {correct ? 'Correct! ' : `Not quite. The answer is "${q.options[q.correct_index]}". `}
