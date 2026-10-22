@@ -16,7 +16,9 @@ from edupulse.pdf_parser import ParsedDocument
 
 DEFAULT_CHUNK_SIZE = 1000
 DEFAULT_OVERLAP = 200
-PAGE_SEPARATOR = "\n\n"
+# A single newline, not a blank line: pages often break mid-sentence, and a
+# blank line would look like a paragraph end, the preferred place to cut a chunk.
+PAGE_SEPARATOR = "\n"
 
 # end of a sentence, but not numbered headings/lists like "5. Cell Division"
 _SENTENCE_END = re.compile(r"(?<!\b\d)(?<!\b\d\d)[.!?][\"')\]]?\s")

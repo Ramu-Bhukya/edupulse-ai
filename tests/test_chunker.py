@@ -83,6 +83,15 @@ def test_chunk_document_tracks_pages():
     assert all(c.page_label == "pp. 1-3" for c in spanning)
 
 
+def test_page_break_mid_sentence_is_not_a_chunk_boundary():
+    first = "Intro sentence about cells. " * 20 + "The overall equation is glucose +"
+    second = "oxygen -> carbon dioxide + water. " + "More about respiration here. " * 20
+    doc = ParsedDocument(filename="t.pdf", pages=[Page(1, first), Page(2, second)])
+    chunks = chunk_document(doc, chunk_size=700, overlap=100)
+    assert not any(c.text.endswith("glucose +") for c in chunks)
+    assert any("glucose +\noxygen" in c.text for c in chunks)
+
+
 def test_page_label():
     assert Chunk("t", 0, 2, 2).page_label == "p. 2"
     assert Chunk("t", 0, 2, 3).page_label == "pp. 2-3"
