@@ -2,6 +2,7 @@ import pytest
 
 from edupulse.presets import Persona, Tone
 from edupulse.prompts import (
+    FORMAT_RULES,
     TASKS,
     build_chat_messages,
     build_system_prompt,
@@ -16,6 +17,10 @@ def test_system_prompt_combines_persona_and_tone():
     prompt = build_system_prompt(PERSONA, TONE)
     assert "You are a test tutor." in prompt
     assert "Stay calm." in prompt
+
+
+def test_system_prompt_includes_formatting_rules():
+    assert build_system_prompt(PERSONA, TONE).endswith(FORMAT_RULES)
 
 
 @pytest.mark.parametrize("task", list(TASKS))

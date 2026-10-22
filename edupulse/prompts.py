@@ -24,7 +24,7 @@ TASKS = {
 
 
 def build_system_prompt(persona: Persona, tone: Tone) -> str:
-    return f"{persona.instructions}\n\nTone: {tone.instructions}"
+    return f"{persona.instructions}\n\nTone: {tone.instructions}\n\n{FORMAT_RULES}"
 
 
 def build_user_prompt(task: str, material: str) -> str:
