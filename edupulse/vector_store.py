@@ -9,6 +9,7 @@ its default embedding model.
 from __future__ import annotations
 
 import hashlib
+import threading
 from dataclasses import dataclass
 
 import chromadb
@@ -19,6 +20,7 @@ from edupulse.chunker import Chunk
 
 DEFAULT_PERSIST_DIR = ".chroma"
 COLLECTION_PREFIX = "doc_"
+_OPEN_LOCK = threading.Lock()
 
 
 def document_id(data: bytes) -> str:
@@ -51,7 +53,11 @@ class VectorStore:
     @classmethod
     def persistent(cls, path: str = DEFAULT_PERSIST_DIR) -> VectorStore:
         settings = ChromaSettings(anonymized_telemetry=False)
-        return cls(chromadb.PersistentClient(path=path, settings=settings))
+        # Chroma starts one shared system per path without locking, so two
+        # threads opening the same path at once can both fail. Open one at a time.
+        with _OPEN_LOCK:
+            client = chromadb.PersistentClient(path=path, settings=settings)
+        return cls(client)
 
     # --- helpers --------------------------------------------------------------
 

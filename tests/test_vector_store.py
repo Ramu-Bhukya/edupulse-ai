@@ -1,3 +1,5 @@
+import threading
+
 import pytest
 
 from edupulse.chunker import Chunk
@@ -74,6 +76,29 @@ def test_index_survives_reopening(tmp_path, keyword_embedder):
     index_sample(VectorStore.persistent(path), keyword_embedder)
     reopened = VectorStore.persistent(path)
     assert reopened.get_document("abc123").filename == "cells.pdf"
+
+
+def test_opening_one_store_from_many_threads_at_once(tmp_path):
+    # The API opens the store inside request threads; two requests arriving
+    # together (React's dev mode sends its first fetches twice) used to crash
+    # both with half-started Chroma clients.
+    path = str(tmp_path / "chroma")
+    barrier = threading.Barrier(8)
+    errors = []
+
+    def open_store():
+        barrier.wait()
+        try:
+            VectorStore.persistent(path).list_documents()
+        except Exception as exc:  # noqa: BLE001 - collect whatever the race raises
+            errors.append(exc)
+
+    threads = [threading.Thread(target=open_store) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert errors == []
 
 
 def test_search_returns_best_match_first(store, keyword_embedder):
