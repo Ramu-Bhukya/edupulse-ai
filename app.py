@@ -90,7 +90,10 @@ def set_document(info: DocumentInfo | None) -> None:
         # answers about the old document would be confusing next to the new one
         st.session_state.messages = []
         st.session_state.takeaways = None
-        st.toast("Started a fresh chat for the new document.")
+        if info:
+            st.toast("Started a fresh chat for the new document.")
+        else:
+            st.toast("Started a fresh chat without a document.")
 
 
 # --- sidebar ------------------------------------------------------------------------
@@ -173,9 +176,25 @@ def sidebar_library(store: VectorStore) -> None:
         st.rerun()
 
 
+def close_document() -> None:
+    """Back to general chat: empty the uploader and the library picker.
+
+    Runs as a button callback, before the widgets are drawn, which is the only
+    time their state may be changed.
+    """
+    st.session_state.upload_key += 1
+    st.session_state.upload_attempt = None
+    st.session_state.library_choice = None
+    set_document(None)
+
+
 def sidebar_document(store: VectorStore) -> None:
     st.subheader("Your document")
-    uploaded = st.file_uploader("Upload a PDF textbook or syllabus", type=["pdf"])
+    uploaded = st.file_uploader(
+        "Upload a PDF textbook or syllabus",
+        type=["pdf"],
+        key=f"uploader_{st.session_state.upload_key}",
+    )
     if uploaded is None:
         st.session_state.upload_attempt = None
         sidebar_library(store)
@@ -189,6 +208,12 @@ def sidebar_document(store: VectorStore) -> None:
 
     if st.session_state.document:
         render_document_badge(st.session_state.document)
+        st.button(
+            "Chat without a document",
+            key="close_doc",
+            on_click=close_document,
+            help="Ask general questions. Answers then don't come from your PDF.",
+        )
 
 
 def sidebar_session(persona: Persona, tone: Tone) -> None:

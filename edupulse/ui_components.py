@@ -30,6 +30,7 @@ DEFAULT_STATE = {
     "search_results": None,
     "search_query": "",
     "upload_attempt": None,
+    "upload_key": 0,  # bumped to give the file uploader a fresh, empty widget
     # quiz
     "quiz": None,
     "quiz_answers": [],
@@ -98,8 +99,9 @@ def render_chat_message(message: dict) -> None:
         st.markdown(message["content"])
         if message.get("document") and is_idk(message["content"]):
             st.caption(
-                "That doesn't seem to be covered in your document. Try rephrasing, "
-                "or look for related terms in the Search tab."
+                "That doesn't seem to be covered in your document (with a PDF open, "
+                "answers come only from it). Try rephrasing or the Search tab, or click "
+                "**Chat without a document** in the sidebar to ask general questions."
             )
         elif message.get("sources"):
             render_sources(message["sources"])

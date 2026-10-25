@@ -91,6 +91,18 @@ export default function DocumentPanel({ documents, activeDoc, apiKey, onSelect, 
           </ul>
         </>
       )}
+      {activeDoc && (
+        <button
+          className="wide"
+          title="Ask general questions. Answers then don't come from your PDF."
+          onClick={() => {
+            setNotice('')
+            onSelect(null)
+          }}
+        >
+          Chat without a document
+        </button>
+      )}
     </section>
   )
 }

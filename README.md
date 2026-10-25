@@ -11,7 +11,7 @@ Built with Python, OpenAI, ChromaDB and two front ends: a **Streamlit** app and 
 
 - **Chat with Notes**: retrieval-augmented answers (RAG) with page citations and a
   Sources panel. If the answer isn't in your document, the tutor says *"I don't know."*
-  instead of making something up.
+  instead of making something up. Click **Chat without a document** for general questions.
 - **Quiz Generator**: multiple-choice questions on the whole document or a topic you pick,
   graded instantly with explanations.
 - **Flashcards**: term/definition cards you can flip, shuffle and export to Anki or Quizlet (CSV).

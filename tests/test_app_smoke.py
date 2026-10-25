@@ -291,6 +291,42 @@ def test_remove_document_from_library(fake_rag):
     assert not [box for box in at.sidebar.selectbox if box.key == "library_choice"]
 
 
+def test_chat_without_a_document_after_upload(fake_rag, fake_llm):
+    at = upload_sample(run_app())
+    at.chat_input[0].set_value("What does the Golgi apparatus do?").run()
+    at.sidebar.button(key="close_doc").click().run()
+    assert not at.exception
+    assert at.session_state.document is None
+    assert at.session_state.messages == []
+    assert any("without a document" in t.value for t in at.toast)
+    # the uploader was replaced by an empty one, so the file isn't indexed again
+    assert at.session_state.upload_key == 1
+
+    at.chat_input[0].set_value("What is a software engineer?").run()
+    system = fake_llm.chat.completions.calls[-1]["messages"][0]["content"]
+    assert "<context>" not in system
+    assert at.session_state.document is None
+
+
+def test_chat_without_a_document_after_library_pick(fake_rag, fake_llm):
+    upload_sample(run_app())
+    at = run_app()
+    picker = at.sidebar.selectbox(key="library_choice")
+    picker.select(picker.options[1]).run()
+    assert at.session_state.document is not None
+    at.sidebar.button(key="close_doc").click().run()
+    assert not at.exception
+    assert at.session_state.document is None
+    assert at.sidebar.selectbox(key="library_choice").value is None
+    at.run()  # stays closed on later reruns
+    assert at.session_state.document is None
+
+
+def test_close_button_only_with_a_document(fake_rag):
+    at = run_app()
+    assert not [b for b in at.sidebar.button if b.key == "close_doc"]
+
+
 def test_search_results_show_score_and_highlights(fake_rag):
     at = upload_sample(run_app())
     at.text_input(key="kb_query").input("Golgi apparatus")

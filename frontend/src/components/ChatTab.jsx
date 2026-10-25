@@ -152,8 +152,9 @@ function ChatMessage({ message }) {
         )}
         {idk && (
           <p className="hint">
-            That doesn&apos;t seem to be covered in your document. Try rephrasing, or ask about
-            a related term.
+            That doesn&apos;t seem to be covered in your document (with a PDF open, answers come
+            only from it). Try rephrasing, or click <strong>Chat without a document</strong> in
+            the sidebar to ask general questions.
           </p>
         )}
         {!idk && message.sources?.length > 0 && (
