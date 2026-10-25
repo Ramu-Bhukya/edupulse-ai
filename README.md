@@ -76,19 +76,26 @@ tests/                  pytest suite (uses fake OpenAI clients, no API calls)
 
 ## Getting started
 
-Requirements: Python 3.11+ (3.12 recommended), an [OpenAI API key](https://platform.openai.com/api-keys),
-and Node 20+ if you want the React front end.
+Requirements: Python 3.12 (3.11 and 3.13 also work), an
+[OpenAI API key](https://platform.openai.com/api-keys), and Node 20+ if you want the React front end.
 
 ```bash
 git clone <your-fork-url> edupulse-ai
 cd edupulse-ai
-python -m venv .venv
+python3.12 -m venv .venv        # Windows: py -3.12 -m venv .venv
 .venv\Scripts\activate          # Windows
 # source .venv/bin/activate     # macOS / Linux
+python --version                # should print Python 3.12.x
 pip install -r requirements.txt
 cp .env.example .env            # then put your key in OPENAI_API_KEY
 python scripts/check_api.py     # optional: check that the key works
 ```
+
+**Intel Macs** need macOS 11 or newer and Python 3.12 (or 3.11). ChromaDB depends on
+`onnxruntime`, which has no Intel Mac build for Python 3.14 or for macOS 10.15 and older,
+so pip stops with `No matching distribution found for onnxruntime`. `requirements.txt`
+already pins the last Intel builds of `pyarrow` and `cryptography`, so nothing has to be
+compiled and you don't need to downgrade numpy or pandas.
 
 ### Streamlit app
 

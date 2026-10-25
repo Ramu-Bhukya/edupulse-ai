@@ -4,3 +4,10 @@ openai==3.35.1
 pydantic==2.14.1
 pypdf[crypto]==6.21.1
 chromadb==1.5.9
+
+# Intel Macs only. Newer pyarrow releases ship Intel builds for macOS 12+ only,
+# and cryptography 49+ ships none, so pip would try (and usually fail) to
+# compile them from source. These are the newest versions with ready-made
+# Intel builds; both work with numpy 2, so nothing else needs downgrading.
+pyarrow==17.0.0; sys_platform == "darwin" and platform_machine == "x86_64" and python_version < "3.13"
+cryptography==48.0.1; sys_platform == "darwin" and platform_machine == "x86_64"
