@@ -1,5 +1,4 @@
 """Export chat history to JSON or Markdown."""
-
 from __future__ import annotations
 
 import json

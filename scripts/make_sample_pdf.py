@@ -1,6 +1,5 @@
 """Generate samples/cell_biology_notes.pdf, a small multi-page PDF used for
 testing and demos. The notes are original text written for this project.
-
 Usage (needs fpdf2 from requirements-dev.txt):
     python scripts/make_sample_pdf.py
 """

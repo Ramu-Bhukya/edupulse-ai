@@ -1,5 +1,4 @@
 """Store document chunks and their embeddings in ChromaDB.
-
 Each uploaded PDF gets its own collection named after a hash of the
 file, so uploading the same file twice can reuse the existing index.
 We pass our own OpenAI vectors in, so Chroma never needs to download

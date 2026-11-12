@@ -4,7 +4,6 @@ import pytest
 
 from edupulse.presets import Persona, Tone, find_by_name, load_presets
 
-
 def test_default_presets_load():
     personas, tones = load_presets()
     assert personas and tones

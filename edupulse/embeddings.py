@@ -1,5 +1,4 @@
 """Turn text into embedding vectors with the OpenAI embeddings API."""
-
 from __future__ import annotations
 
 import threading

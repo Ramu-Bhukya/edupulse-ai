@@ -1,5 +1,4 @@
 from pathlib import Path
-
 import httpx2
 import openai
 import pytest

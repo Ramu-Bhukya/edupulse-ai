@@ -1,5 +1,16 @@
+
 -r requirements-api.txt
 pytest==9.1.1
 ruff==0.17.1
 httpx==0.28.1
 fpdf2==2.8.9
+
+
+
+Line-by-Line Breakdown
+
+• -r requirements-api.txt: Tells pip to also install all the core application dependencies listed inside the separate requirements-api.txt file first.
+• pytest==9.1.1: Installs Pytest (version 9.1.1) so you can run the project's automated test suite.
+• ruff==0.17.1: Installs Ruff (version 0.17.1) to check code style, formatting, and lint rules defined in pyproject.toml.
+• httpx==0.28.1: Installs HTTPX, an HTTP client library commonly used by Pytest to send simulated web requests to FastAPI or API endpoints during testing.
+• fpdf2==2.8.9: Installs fpdf2, a library for generating or verifying PDF documents (likely used in tests or report exports).

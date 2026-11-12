@@ -1,5 +1,4 @@
 """Prompt templates and builders."""
-
 from __future__ import annotations
 
 from edupulse.presets import Persona, Tone

@@ -1,7 +1,6 @@
 import pytest
 from openai import OpenAI
 from pydantic import BaseModel
-
 from edupulse.config import MissingAPIKeyError
 from edupulse.llm import (
     StructuredOutputError,

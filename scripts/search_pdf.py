@@ -1,9 +1,7 @@
 """Index a PDF and print the chunks that best match a question.
-
 Usage:
     python scripts/search_pdf.py samples/cell_biology_notes.pdf "What does the Golgi do?"
 """
-
 import argparse
 import sys
 from pathlib import Path

@@ -1,4 +1,4 @@
-# Extra packages for the FastAPI backend used by the React front end.
+# Extra packages for the FastAPI backend and used by the React front end.
 -r requirements.txt
 fastapi==0.156.4
 uvicorn==0.54.0

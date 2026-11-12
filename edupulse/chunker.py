@@ -1,5 +1,4 @@
 """Split document text into overlapping chunks for embedding.
-
 LLMs (and embedding models) have a limited context window, so a long
 textbook has to be cut into smaller pieces. A sliding window with some
 overlap keeps sentences that sit on a boundary readable in at least one

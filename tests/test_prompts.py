@@ -1,5 +1,4 @@
 import pytest
-
 from edupulse.presets import Persona, Tone
 from edupulse.prompts import (
     FORMAT_RULES,

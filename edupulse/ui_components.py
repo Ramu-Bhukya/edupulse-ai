@@ -1,5 +1,4 @@
 """Reusable Streamlit widgets for app.py.
-
 Only presentation lives here; the app decides what to show and when.
 """
 

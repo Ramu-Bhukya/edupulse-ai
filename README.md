@@ -24,7 +24,7 @@ Built with Python, OpenAI, ChromaDB and two front ends: a **Streamlit** app and 
 
 ## How it works
 
-```mermaid
+<!-- mermaid
 flowchart LR
     PDF[PDF upload] --> P[pypdf<br/>extract + clean text]
     P --> C[Sliding-window chunker<br/>1000 chars, 200 overlap]
@@ -34,8 +34,8 @@ flowchart LR
     Q[Question] --> QE[Embed question]
     QE --> DB
     DB -->|top 4 chunks| PR[Prompt with guardrails<br/>+ numbered context]
-    PR --> LLM[gpt-4o-mini] --> A[Streamed answer + sources]
-```
+    PR --> LLM[gpt-4o-mini] --> A[Streamed answer + sources] -->
+
 
 1. **Parsing** (`pdf_parser.py`): text is extracted page by page; ligatures, hyphenated line
    breaks, running headers/footers and page numbers are cleaned up.

@@ -1,6 +1,5 @@
 from edupulse.text_utils import escape_markdown, highlight_terms, query_terms
 
-
 def test_escape_markdown():
     assert escape_markdown("cost is $5 * 2") == r"cost is \$5 \* 2"
     assert escape_markdown("snake_case #1") == r"snake\_case \#1"

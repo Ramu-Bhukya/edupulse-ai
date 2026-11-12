@@ -1,5 +1,4 @@
 """Retrieval-augmented generation (RAG) over an uploaded document.
-
 question -> embed -> top-k chunks from Chroma -> chunks go into the
 system prompt as context -> the model answers from that context.
 """

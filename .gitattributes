@@ -1,3 +1,15 @@
 * text=auto eol=lf
 *.pdf binary
 *.png binary
+
+
+
+step-by-step approach
+
+• * text=auto eol=lf: Automatically detects text files and forces them to use LF (Unix/macOS-style) line endings instead of CRLF (Windows-style) line endings. This prevents false "file modified" warnings and formatting bugs when developers collaborate across Windows and Mac.
+• *.pdf binary: Tells Git to treat all PDF files as raw binary data rather than readable text. Git will not attempt to convert line endings or show text-based line-by-line diffs for .pdf files.
+• *.png binary: Marks all PNG image files as binary data so Git does not corrupt image bytes by altering newline characters inside them.
+
+Why It Matters for Your Setup
+
+Since you are working on macOS, your system already uses LF line endings natively. Having this .gitattributes file ensures that if someone on Windows pulls or edits the repository, your scripts, configuration files, PDFs, and PNG assets stay intact without line-ending errors.

@@ -1,3 +1,5 @@
+
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
@@ -8,5 +10,13 @@ select = ["E", "F", "I", "B", "UP"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+
+How to Use These Tools
+
+If you want to run these checks locally in your terminal, use these commands from the project's root folder:
+• Check for code issues: ruff check .
+• Auto-fix formatting & imports: ruff check --fix .
+• Run the test suite: pytest
 
 

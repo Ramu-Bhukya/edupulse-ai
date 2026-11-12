@@ -1,5 +1,4 @@
 """Check that the OpenAI key and model are working.
-
 Usage:
     python scripts/check_api.py
 """

@@ -22,3 +22,13 @@ dist/
 .idea/
 .DS_Store
 Thumbs.db
+
+
+
+# What This Tells Us About Your Project
+
+# Based on this .gitignore, edupulse-ai is a full-stack AI application combining:
+# 1. A Python backend (using Ruff, Pytest, and likely FastAPI or Streamlit).
+# 2. A Chroma vector database for AI/RAG storage.
+# 3. A React/Node frontend (node_modules/ and dist/).
+# 4. Environment variables stored in a local .env file that you will need to create yourself before running the app.

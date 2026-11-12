@@ -1,5 +1,4 @@
 """Persona and tone presets used to build system prompts.
-
 The presets live in data/personas.json so new personas can be added
 without touching the code.
 """

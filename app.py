@@ -1,7 +1,6 @@
-"""EduPulse AI: Streamlit front end.
+# EduPulse AI: Streamlit front end. 
 
-Run with:  streamlit run app.py
-"""
+# Run with:  streamlit run app.py
 
 import json
 import random

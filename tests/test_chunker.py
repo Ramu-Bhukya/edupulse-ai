@@ -1,5 +1,4 @@
 from pathlib import Path
-
 import pytest
 
 from edupulse.chunker import Chunk, chunk_document, split_text

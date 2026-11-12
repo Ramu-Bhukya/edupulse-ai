@@ -3,7 +3,6 @@
 Functions take the client as an argument so they are easy to test with
 a fake client and so the Streamlit app can cache one client per key.
 """
-
 from __future__ import annotations
 
 from collections.abc import Iterator

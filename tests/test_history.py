@@ -1,7 +1,6 @@
 import json
 
 from edupulse.history import export_json, export_markdown
-
 MESSAGES = [
     {"role": "user", "content": "What is ATP?"},
     {"role": "assistant", "content": "The cell's energy currency.", "persona": "Medical Tutor"},

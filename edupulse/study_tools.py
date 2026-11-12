@@ -1,5 +1,4 @@
 """Study helpers that need structured (JSON) answers from the model."""
-
 from __future__ import annotations
 
 import csv

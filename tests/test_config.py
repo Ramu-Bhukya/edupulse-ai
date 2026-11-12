@@ -2,7 +2,6 @@ import pytest
 
 from edupulse import config
 
-
 @pytest.fixture(autouse=True)
 def clean_env(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)

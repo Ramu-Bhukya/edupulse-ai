@@ -2,7 +2,6 @@ import pytest
 
 from edupulse.embeddings import OpenAIEmbedder
 
-
 def test_embeds_in_batches_and_keeps_order(fake_client):
     embedder = OpenAIEmbedder(fake_client, model="test-embed", batch_size=2)
     texts = ["a", "bb", "ccc", "dddd", "eeeee"]

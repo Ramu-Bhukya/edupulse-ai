@@ -1,5 +1,4 @@
 """App configuration and API key handling.
-
 Secrets are never hard-coded. The OpenAI key is looked up in this order:
 1. a key passed in explicitly (e.g. typed into the sidebar)
 2. the OPENAI_API_KEY environment variable (loaded from .env locally)

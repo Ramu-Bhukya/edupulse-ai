@@ -1,5 +1,4 @@
 """Extract text from PDF files with pypdf."""
-
 from __future__ import annotations
 
 import math

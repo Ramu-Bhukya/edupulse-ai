@@ -1,4 +1,4 @@
-"""Shared test helpers: a fake OpenAI client that never touches the network."""
+# Shared test helpers: a fake OpenAI client that never touches the network.
 
 import math
 import re

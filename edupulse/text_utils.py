@@ -1,5 +1,4 @@
 """Small text helpers for displaying document snippets."""
-
 from __future__ import annotations
 
 import re

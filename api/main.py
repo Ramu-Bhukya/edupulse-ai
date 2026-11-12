@@ -1,5 +1,4 @@
 """FastAPI backend for the React front end.
-
 It exposes the same edupulse core the Streamlit app uses, so both front
 ends share one document index and one set of prompts.
 

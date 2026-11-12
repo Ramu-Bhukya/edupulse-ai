@@ -1,5 +1,4 @@
 """PDF -> text -> chunks -> embeddings -> vector store, in one call."""
-
 from __future__ import annotations
 
 from collections.abc import Callable

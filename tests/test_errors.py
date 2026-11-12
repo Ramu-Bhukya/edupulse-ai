@@ -1,7 +1,6 @@
 import httpx2
 import openai
 import pytest
-
 from edupulse.config import MissingAPIKeyError
 from edupulse.llm import StructuredOutputError, friendly_error
 
